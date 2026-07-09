@@ -10,6 +10,7 @@ import {
   type RconCommandsResponse,
 } from "@palserver/shared";
 import type { AgentClient } from "./api";
+import { maskSteamIdsInText } from "./SteamId";
 import { btn, btnGhost, card, errorCls, inputCls, labelCls } from "./ui";
 
 interface LogEntry {
@@ -256,7 +257,7 @@ export function ConsoleTab({ client, instanceId }: { client: AgentClient; instan
                   <FiPlay className="size-4" /> {busy ? "執行中…" : "執行"}
                 </button>
                 <code className="truncate rounded-lg bg-card-soft px-2 py-1 text-xs text-ink-muted">
-                  {buildCommand(selected, values)}
+                  {maskSteamIdsInText(buildCommand(selected, values))}
                 </code>
               </div>
             </form>
@@ -301,9 +302,11 @@ export function ConsoleTab({ client, instanceId }: { client: AgentClient; instan
                 ? "(尚未執行任何指令)"
                 : log.map((entry, i) => (
                     <span key={i}>
-                      <span className="text-[#7ec8f0]">&gt; {entry.command}</span>
+                      <span className="text-[#7ec8f0]">&gt; {maskSteamIdsInText(entry.command)}</span>
                       {"\n"}
-                      <span className={entry.failed ? "text-[#ef6a6a]" : undefined}>{entry.output}</span>
+                      <span className={entry.failed ? "text-[#ef6a6a]" : undefined}>
+                        {maskSteamIdsInText(entry.output)}
+                      </span>
                       {"\n\n"}
                     </span>
                   ))}

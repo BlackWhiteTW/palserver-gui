@@ -17,6 +17,7 @@ import { SavesTab } from "./SavesTab";
 import { RestartCard } from "./RestartCard";
 import { VersionCard } from "./VersionCard";
 import { EngineTab } from "./EngineTab";
+import { maskSteamIdsInText } from "./SteamId";
 import { STATUS_LABELS } from "./labels";
 import { StatusBadge, btn, btnDanger, btnGhost, card, errorCls } from "./ui";
 
@@ -335,7 +336,7 @@ function LogsTab({ client, instanceId }: { client: AgentClient; instanceId: stri
         </div>
       )}
       <pre className="h-[440px] overflow-auto rounded-(--radius-cute) bg-[#1c1927] p-4 font-mono text-xs whitespace-pre-wrap break-all text-[#cfd6df]">
-        {lines.length ? lines.join("\n") : "(尚無日誌)"}
+        {lines.length ? maskSteamIdsInText(lines.join("\n")) : "(尚無日誌)"}
         <div ref={bottomRef} />
       </pre>
     </div>

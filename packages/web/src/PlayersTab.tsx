@@ -7,13 +7,10 @@ import {
   FiLogOut,
   FiLogIn,
   FiRefreshCw,
-  FiEye,
-  FiEyeOff,
-  FiCopy,
-  FiCheck,
   FiUserCheck,
   FiUserX,
 } from "react-icons/fi";
+import { SteamId } from "./SteamId";
 import {
   savToMap,
   type KnownPlayer,
@@ -30,48 +27,6 @@ const fmtUptime = (seconds: number) => {
   const m = Math.floor((seconds % 3600) / 60);
   return h > 0 ? `${h} 小時 ${m} 分` : `${m} 分`;
 };
-
-/** Steam IDs identify a real person, so show them masked by default —
- * enough to tell players apart, not enough to paste into a lookup site. */
-function maskSteamId(userId: string): string {
-  const digits = userId.replace(/^steam_/, "");
-  if (digits.length <= 8) return digits;
-  return `${digits.slice(0, 4)}${"•".repeat(6)}${digits.slice(-4)}`;
-}
-
-function SteamId({ userId }: { userId: string }) {
-  const [revealed, setRevealed] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const raw = userId.replace(/^steam_/, "");
-
-  const copy = async () => {
-    await navigator.clipboard.writeText(raw).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-
-  return (
-    <span className="inline-flex items-center gap-1.5 font-mono text-xs text-ink-muted">
-      {revealed ? raw : maskSteamId(userId)}
-      <button
-        onClick={() => setRevealed((v) => !v)}
-        className="text-ink-muted transition hover:text-pal"
-        aria-label={revealed ? "隱藏 Steam ID" : "顯示 Steam ID"}
-        title={revealed ? "隱藏" : "顯示完整 Steam ID"}
-      >
-        {revealed ? <FiEyeOff className="size-3.5" /> : <FiEye className="size-3.5" />}
-      </button>
-      <button
-        onClick={copy}
-        className="text-ink-muted transition hover:text-pal"
-        aria-label="複製 Steam ID"
-        title="複製"
-      >
-        {copied ? <FiCheck className="size-3.5 text-grass" /> : <FiCopy className="size-3.5" />}
-      </button>
-    </span>
-  );
-}
 
 const EMPTY_MODERATION: ModerationLists = {
   supported: false,
@@ -401,10 +356,11 @@ function ModerationCard({
           <div className="flex flex-col divide-y divide-line">
             {moderation.whitelist.map((w) => (
               <div key={w.value} className="flex items-center justify-between gap-3 px-5 py-2.5">
-                <span className="font-mono text-xs break-all">
-                  {w.isIp ? "IP " : ""}
-                  {w.value}
-                </span>
+                {w.isIp ? (
+                  <span className="font-mono text-xs break-all">IP {w.value}</span>
+                ) : (
+                  <SteamId userId={w.value} />
+                )}
                 {!w.isIp && (
                   <button
                     className="shrink-0 rounded-full border-[1.5px] border-line px-3 py-1 text-xs font-bold text-berry transition hover:border-berry"
@@ -431,7 +387,11 @@ function ModerationCard({
             {moderation.bans.map((b, i) => (
               <div key={`${b.userId ?? b.ip}-${i}`} className="flex items-center justify-between gap-3 px-5 py-2.5">
                 <div className="min-w-0">
-                  <p className="font-mono text-xs break-all">{b.userId ?? `IP ${b.ip}`}</p>
+                  {b.userId ? (
+                    <SteamId userId={b.userId} />
+                  ) : (
+                    <p className="font-mono text-xs break-all">IP {b.ip}</p>
+                  )}
                   {b.reason && <p className="text-xs text-ink-muted">原因:{b.reason}</p>}
                 </div>
                 {b.userId && (
