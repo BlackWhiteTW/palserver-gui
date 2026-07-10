@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { FiMonitor, FiMoon, FiSun } from "react-icons/fi";
+import { useEffect, useState } from "react";
+import { FiMoon, FiSun } from "react-icons/fi";
 
 /**
  * 深淺色模式:三段式 —— 跟隨系統(預設)/ 淺色 / 深色。
@@ -32,9 +32,22 @@ export function applyThemeMode(mode: ThemeMode): void {
   else document.documentElement.dataset.theme = mode;
 }
 
-/** header 上的圓形切換鈕,點一下循環:跟隨系統 → 淺色 → 深色。 */
+/**
+ * header 上的圓形切換鈕,點一下循環:跟隨系統 → 淺色 → 深色。
+ * 圖示一律顯示目前實際的深淺色(太陽/月亮);「跟隨系統」跟著系統當下的
+ * 外觀走,系統切換時圖示也即時跟著換。
+ */
 export function ThemeToggle() {
   const [mode, setMode] = useState<ThemeMode>(loadThemeMode);
+  const [systemDark, setSystemDark] = useState(
+    () => window.matchMedia("(prefers-color-scheme: dark)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
   const cycle = () => {
     const next = ORDER[(ORDER.indexOf(mode) + 1) % ORDER.length];
     setMode(next);
@@ -46,7 +59,8 @@ export function ThemeToggle() {
       /* 無痕模式等存不進去就只作用這一次 */
     }
   };
-  const Icon = mode === "light" ? FiSun : mode === "dark" ? FiMoon : FiMonitor;
+  const isDark = mode === "dark" || (mode === "auto" && systemDark);
+  const Icon = isDark ? FiMoon : FiSun;
   return (
     <button
       className="rounded-full border-2 border-line bg-card-soft p-2 text-ink transition hover:-translate-y-px hover:border-pal active:translate-y-0 active:scale-95"
