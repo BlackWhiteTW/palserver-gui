@@ -281,6 +281,16 @@ function CreateDialog({
             onChange={(e) => setServerPassword(e.target.value)}
           />
         </label>
+        {backend === "native" && (
+          <p className="inline-flex items-start gap-2 rounded-xl border-2 border-pal/30 bg-pal/5 px-3 py-2 text-xs text-ink-muted">
+            <FiDownload className="mt-0.5 size-4 shrink-0 text-pal" />
+            <span>
+              首次安裝會下載 Palworld 伺服器檔案,<b className="text-ink">容量很大(數十 GB)</b>,
+              需要一段時間,請耐心等候 —— 建立後可在<b className="text-ink">日誌</b>分頁看安裝進度。
+              (填既有安裝目錄則會直接採用、跳過下載。)
+            </span>
+          </p>
+        )}
         {error && <p className={errorCls}>{error}</p>}
         <div className="mt-1 flex gap-2">
           <button className={btn} disabled={busy}>
