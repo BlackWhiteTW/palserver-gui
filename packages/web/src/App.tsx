@@ -220,6 +220,13 @@ function CreateDialog({
   const [serverPassword, setServerPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [isMac, setIsMac] = useState(false);
+
+  // agent 在 macOS 時,主機無法實際執行 Palworld 伺服器(SteamCMD 32-bit 在
+  // Rosetta 下不可用、PalServer 存檔即崩潰),不論 native 或 Docker 都一樣。
+  useEffect(() => {
+    client.info().then((i) => setIsMac(i.platform === "darwin")).catch(() => {});
+  }, [client]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -251,6 +258,13 @@ function CreateDialog({
         <h2 className="inline-flex items-center gap-2 text-lg font-extrabold">
           <GiEggClutch className="size-5 text-pal" /> 建立伺服器
         </h2>
+        {isMac && (
+          <p className="rounded-xl border-2 border-sun/40 bg-sun/10 px-3 py-2 text-xs text-sun">
+            這台 agent 執行在 macOS 上,<b>無法實際執行 Palworld 伺服器</b>
+            (SteamCMD/PalServer 在 macOS 不支援)。請把 agent 裝在 Windows 或 Linux 主機上;
+            這裡僅供開發或管理遠端主機。
+          </p>
+        )}
         <label className={labelCls}>
           名稱
           <input
@@ -270,7 +284,7 @@ function CreateDialog({
             onChange={(e) => setBackend(e.target.value as "native" | "docker")}
           >
             <option value="native">原生(直接在這台主機上運行,推薦)</option>
-            <option value="docker">Docker 容器</option>
+            <option value="docker">Docker 容器(beta)</option>
           </select>
         </label>
         {backend === "native" && (

@@ -108,6 +108,7 @@ export function registerRoutes(
       dockerVersion,
       instanceCount: store.list().length,
       authenticated,
+      platform: process.platform,
     };
   });
 

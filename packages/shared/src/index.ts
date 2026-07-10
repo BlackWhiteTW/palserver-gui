@@ -469,6 +469,8 @@ export interface AgentInfo {
   instanceCount: number;
   /** 此請求是否已授權(本機 loopback 或帶了正確 token)。前端據此決定直接進入或引導配對。 */
   authenticated: boolean;
+  /** agent 所在主機平台(process.platform:darwin / win32 / linux)。前端用來提示 macOS 限制。 */
+  platform: string;
 }
 
 export interface ApiError {
