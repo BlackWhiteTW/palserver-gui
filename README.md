@@ -275,7 +275,12 @@ PALSERVER_IMAGE_VANILLA=palserver/dev-stub:latest pnpm dev:agent
 
 ## 授權與連結
 
-MIT。
+**[PolyForm Noncommercial 1.0.0](LICENSE.md)** —— 原始碼公開,個人與非商業用途可自由使用、
+修改與散布;**禁止任何商業/盈利用途**(販售本軟體、或把它包進付費服務等)。
+如需商業授權,請聯絡 <contact@iosoftware.ai>。
+
+> *License: source-available under PolyForm Noncommercial 1.0.0 — free for personal and
+> noncommercial use; **commercial use is not permitted**. Contact us for commercial licensing.*
 
 - **常見問題:** <https://faq.toc.icu/>
 - **Discord:** <https://discord.gg/sgMMdUZd3V>
