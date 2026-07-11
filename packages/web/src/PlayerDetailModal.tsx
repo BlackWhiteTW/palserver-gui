@@ -10,12 +10,14 @@ import { CustomPalModal } from "./CustomPalModal";
 import { t, useI18n } from "./i18n";
 import { Overlay, card, btn, btnGhost, errorCls } from "./ui";
 
-/** 「玩家操作」選單:每一項對應一條指令(預選 + 預填玩家),或自訂帕魯彈窗。
- *  cmd = ConsoleTab 要預選的指令名;custom-pal 走 CustomPalModal。 */
-const PLAYER_ACTIONS: { label: string; cmd?: string; customPal?: boolean }[] = [
+/** 「玩家操作」選單:每一項對應一條指令(預選 + 預填玩家),或自訂帕魯/帕魯蛋彈窗。
+ *  cmd = ConsoleTab 要預選的指令名;customPalMode = 開 CustomPalModal(pal / egg)。 */
+const PLAYER_ACTIONS: { label: string; cmd?: string; customPalMode?: "pal" | "egg" }[] = [
   { label: "給予道具", cmd: "give" },
   { label: "給予帕魯", cmd: "givepal" },
-  { label: "給予自訂帕魯(贊助者)", customPal: true },
+  { label: "給予帕魯蛋", cmd: "giveegg" },
+  { label: "給予自訂帕魯(贊助者)", customPalMode: "pal" },
+  { label: "給予自訂帕魯蛋(贊助者)", customPalMode: "egg" },
   { label: "給予經驗值", cmd: "give_exp" },
   { label: "給予科技點數", cmd: "givetechpoints" },
   { label: "給予古代科技點數", cmd: "givebosstechpoints" },
@@ -41,9 +43,9 @@ export function PlayerDetailModal({
   const [detail, setDetail] = useState<PlayerDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  // 跳出來的子彈窗:指令台(帶預選指令)或自訂帕魯。玩家 = identifier(這位玩家的 userId)。
+  // 跳出來的子彈窗:指令台(帶預選指令)或自訂帕魯/帕魯蛋。玩家 = identifier(這位玩家的 userId)。
   const [actionCmd, setActionCmd] = useState<string | null>(null);
-  const [showCustomPal, setShowCustomPal] = useState(false);
+  const [customPalMode, setCustomPalMode] = useState<"pal" | "egg" | null>(null);
 
   useEffect(() => {
     client
@@ -80,11 +82,11 @@ export function PlayerDetailModal({
                         className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[13px] font-bold transition hover:bg-card-soft"
                         onClick={() => {
                           setMenuOpen(false);
-                          if (a.customPal) setShowCustomPal(true);
+                          if (a.customPalMode) setCustomPalMode(a.customPalMode);
                           else if (a.cmd) setActionCmd(a.cmd);
                         }}
                       >
-                        {a.customPal ? (
+                        {a.customPalMode ? (
                           <GiShield className="size-4 text-pal" />
                         ) : (
                           <FiTerminal className="size-4 text-ink-muted" />
@@ -145,14 +147,14 @@ export function PlayerDetailModal({
         </Overlay>
       )}
 
-      {/* 自訂帕魯(贊助者):CustomPalModal 自帶授權閘門,預填目標玩家。 */}
-      {showCustomPal && (
+      {/* 自訂帕魯 / 帕魯蛋(贊助者):CustomPalModal 自帶授權閘門,預填目標玩家。 */}
+      {customPalMode && (
         <CustomPalModal
           client={client}
           instanceId={instanceId}
-          mode="pal"
+          mode={customPalMode}
           initialUserId={identifier}
-          onClose={() => setShowCustomPal(false)}
+          onClose={() => setCustomPalMode(null)}
         />
       )}
     </>
