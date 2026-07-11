@@ -11,6 +11,7 @@ import {
 } from "@palserver/shared";
 import type { AgentClient } from "./api";
 import { useGameData, palIconUrl, type GameData } from "./gameData";
+import { PlayerDetailModal } from "./PlayerDetailModal";
 import { t, useI18n } from "./i18n";
 import { Overlay, btn, btnGhost, card, errorCls } from "./ui";
 
@@ -63,6 +64,7 @@ export function MapTab({ client, instanceId }: { client: AgentClient; instanceId
   const [guilds, setGuilds] = useState<PdGuild[]>([]);
   const [guildsDetailed, setGuildsDetailed] = useState(false);
   const [guildDetailId, setGuildDetailId] = useState<string | null>(null);
+  const [playerDetail, setPlayerDetail] = useState<{ id: string; label: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
@@ -140,6 +142,7 @@ export function MapTab({ client, instanceId }: { client: AgentClient; instanceId
                 detailed={guildsDetailed}
                 gameData={gameData}
                 onGuildClick={guildsDetailed ? setGuildDetailId : undefined}
+                onPlayerClick={(id, label) => setPlayerDetail({ id, label })}
               />
             </div>
           </div>
@@ -152,6 +155,16 @@ export function MapTab({ client, instanceId }: { client: AgentClient; instanceId
           instanceId={instanceId}
           guildId={guildDetailId}
           onClose={() => setGuildDetailId(null)}
+        />
+      )}
+
+      {playerDetail && (
+        <PlayerDetailModal
+          client={client}
+          instanceId={instanceId}
+          identifier={playerDetail.id}
+          displayLabel={playerDetail.label}
+          onClose={() => setPlayerDetail(null)}
         />
       )}
     </div>
@@ -273,6 +286,7 @@ function PlayerMap({
   detailed,
   gameData,
   onGuildClick,
+  onPlayerClick,
 }: {
   players: RestPlayer[];
   guilds: PdGuild[];
@@ -281,12 +295,16 @@ function PlayerMap({
   detailed: boolean;
   gameData: GameData | null;
   onGuildClick?: (guildId: string) => void;
+  /** Open the full player-detail view (same as the player list). */
+  onPlayerClick?: (userId: string, name: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
   const onGuildClickRef = useRef(onGuildClick);
   onGuildClickRef.current = onGuildClick;
+  const onPlayerClickRef = useRef(onPlayerClick);
+  onPlayerClickRef.current = onPlayerClick;
 
   useEffect(() => {
     const el = containerRef.current;
@@ -398,6 +416,7 @@ function PlayerMap({
           `<div>${t("座標")} ${Math.round(x)}, ${Math.round(y)} · Lv.${p.level}</div>`,
         { direction: "top", className: "pmap-detail" },
       );
+      marker.on("click", () => onPlayerClickRef.current?.(p.userId, p.name));
       group.addLayer(marker);
     }
   }, [players, guilds, detailed, gameData]);
