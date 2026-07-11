@@ -831,5 +831,9 @@
  "k8s 模式不會幫你部署伺服器,而是遙控叢集裡「已存在」的 PalServer StatefulSet:啟動/停止會把副本數在 1 / 0 之間切換,存檔備份等透過 kubectl exec 進 Pod 操作。agent 會依序用 PALSERVER_KUBECONFIG、Pod 內 ServiceAccount、或 ~/.kube/config 連上叢集。": "k8s mode doesn't deploy a server for you — it drives an existing PalServer StatefulSet in your cluster: start/stop scales replicas between 1 and 0, and saves/backups run via kubectl exec into the Pod. The agent connects using PALSERVER_KUBECONFIG, an in-Pod ServiceAccount, or ~/.kube/config, in that order.",
  "命名空間(Namespace)": "Namespace",
  "StatefulSet 名稱": "StatefulSet name",
- "Service 名稱(選填,用來顯示連線位址)": "Service name (optional, for the connect address)"
+ "Service 名稱(選填,用來顯示連線位址)": "Service name (optional, for the connect address)",
+ "移除這個伺服器實例,": "Remove this server instance — ",
+ "世界存檔會一併永久刪除": "the world saves are permanently deleted with it",
+ "。此動作無法復原。": ". This cannot be undone.",
+ "(若伺服器檔案位於你自行指定的外部目錄,該目錄會保留。)": "(If the server files live in an external directory you chose yourself, that directory is kept.)"
 }

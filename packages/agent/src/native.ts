@@ -8,6 +8,7 @@ import type { InstallError, InstanceStats, InstanceStatus } from "@palserver/sha
 import type { DriverContext, ServerDriver } from "./driver.js";
 import type { InstanceRecord } from "./store.js";
 import { renderPalWorldSettingsIni } from "./settings-ini.js";
+import { mergeEnginePatch } from "./engine-ini-merge.js";
 import { rest } from "./restapi.js";
 import { DATA_DIR } from "./env.js";
 
@@ -299,16 +300,17 @@ function writeIni(rec: InstanceRecord, ctx: DriverContext): void {
   const configDir = path.join(serverRoot(rec, ctx), "Pal", "Saved", "Config", CONFIG_PLATFORM_DIR);
   fs.mkdirSync(configDir, { recursive: true });
   fs.writeFileSync(path.join(configDir, "PalWorldSettings.ini"), renderPalWorldSettingsIni(rec.settings));
-  writeQueryPortEngineIni(configDir, rec.queryPort);
+  applyEngineIni(configDir, rec);
 }
 
 /**
- * 把唯一的 Steam 查詢埠寫進 Engine.ini 的 [OnlineSubsystemSteam] GameServerQueryPort。
- * 這是命令列 -queryport 之外的第二道保險(有些版本只認 ini)。就地合併:只動這個 key,
- * 保留使用者/引擎分頁寫的其他區塊與設定,不覆蓋整份檔案。
+ * 每次啟動前重寫 Engine.ini:把 store 裡的受管理微調 + 唯一的 Steam 查詢埠合併回檔案。
+ * 為什麼要每次重套:伺服器關機時 UE 會把 Engine.ini 重寫回它自己的預設,所以使用者
+ * 存的微調在一輪 start→stop 後就沒了。這裡在開機前一刻把它們補回去,保證這一輪生效;
+ * store 才是權威來源,檔案只是拋棄式的套用結果。合併皆就地進行,不覆蓋未受管理的區塊。
  */
-function writeQueryPortEngineIni(configDir: string, queryPort: number | undefined): void {
-  if (!queryPort) return;
+function applyEngineIni(configDir: string, rec: InstanceRecord): void {
+  if (!rec.engineSettings && !rec.queryPort) return;
   const file = path.join(configDir, "Engine.ini");
   let raw = "";
   try {
@@ -316,7 +318,14 @@ function writeQueryPortEngineIni(configDir: string, queryPort: number | undefine
   } catch {
     // Engine.ini 尚未存在,從空白建立。
   }
-  fs.writeFileSync(file, setIniKey(raw, "OnlineSubsystemSteam", "GameServerQueryPort", String(queryPort)));
+  if (rec.engineSettings && Object.keys(rec.engineSettings).length) {
+    raw = mergeEnginePatch(raw, rec.engineSettings);
+  }
+  // 查詢埠不是受管理的 Engine 微調 key,用通用 ini setter 單獨寫入 [OnlineSubsystemSteam]。
+  if (rec.queryPort) {
+    raw = setIniKey(raw, "OnlineSubsystemSteam", "GameServerQueryPort", String(rec.queryPort));
+  }
+  fs.writeFileSync(file, raw);
 }
 
 /** 在指定 [section] 底下設定 key=value:key 已存在就替換該行,section 存在就插入其下,
@@ -560,8 +569,13 @@ export const nativeDriver: ServerDriver = {
 
   async remove(rec, ctx) {
     await this.stop(rec, ctx);
-    // Agent-managed installs and saves stay on disk; deleting world data
-    // must remain an explicit, separate action.
+    // 真正刪除:agent 自管的安裝與存檔連同 instanceDir 一起刪(由 route 統一刪除
+    // ctx.instanceDir)。若伺服器檔在 agent 自行安裝/搬移過去的外部目錄,那也是我們
+    // 建立的、一併刪除;但「認領」的既有安裝(serverDirManaged=false)是使用者自己
+    // 原本就有的目錄,絕不刪。
+    if (rec.serverDir && rec.serverDirManaged) {
+      fs.rmSync(rec.serverDir, { recursive: true, force: true });
+    }
   },
 
   async stats(_rec, ctx) {
@@ -633,6 +647,21 @@ function palDefenderLogDir(rec: InstanceRecord, ctx: DriverContext): string | nu
     if (fs.existsSync(dir)) return dir;
   }
   return null;
+}
+
+/** Last few non-empty lines of PalDefender's newest log — a hint for why it
+ * aborted startup, surfaced in the "startup failure" restart event. Empty when
+ * there's no log dir/file. */
+export function newestPalDefenderLogLines(rec: InstanceRecord, ctx: DriverContext, n = 3): string[] {
+  const dir = palDefenderLogDir(rec, ctx);
+  if (!dir) return [];
+  const file = newestFile(dir);
+  if (!file) return [];
+  try {
+    return fs.readFileSync(file, "utf8").split(/\r?\n/).filter((l) => l.trim()).slice(-n);
+  } catch {
+    return [];
+  }
 }
 
 function newestFile(dir: string): string | null {

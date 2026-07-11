@@ -417,10 +417,13 @@ export function registerRoutes(
 
   app.delete("/api/instances/:id", async (req, reply) => {
     const rec = getOr404((req.params as { id: string }).id);
+    // 真正刪除。driver.remove 負責各後端的收尾:停止行程 / 移除容器 / 刪除 agent
+    // 自行安裝的外部目錄(native)。k8s 只縮到 0、刻意保留叢集 PVC(那不是我們建的)。
     await driverOf(rec).remove(rec, ctxOf(rec));
+    // agent 自管的資料根目錄(native 安裝+存檔、docker 綁定掛載資料、pid/log)一併刪掉。
+    // 對 k8s 這個目錄通常是空的,force 會忽略不存在。
+    fs.rmSync(store.instanceDir(rec.id), { recursive: true, force: true });
     store.remove(rec.id);
-    // World saves under the instance/server dir are kept on disk deliberately;
-    // deleting them should be an explicit, separate action.
     reply.code(204);
   });
 
@@ -773,7 +776,9 @@ export function registerRoutes(
       }),
     );
     const patch = z.object(shape).strict().parse(req.body);
-    const status = await writeEngineSettings(rec, ctxOf(rec), patch as EngineSettings);
+    const { status, engineSettings } = await writeEngineSettings(rec, ctxOf(rec), patch as EngineSettings);
+    // store 是權威來源:每次啟動前會把它合併回 Engine.ini(伺服器關機會重寫該檔)。
+    store.update(rec.id, { engineSettings });
     return { ...status, applied: "on-next-restart" };
   });
 

@@ -313,9 +313,12 @@ function DangerZone({
         <FiAlertTriangle className="size-4" /> {t("刪除伺服器")}
       </h3>
       <p className="text-[13px] text-ink-muted">
-        {t("移除這個伺服器實例。此動作無法復原。")}
-        <b className="text-ink">{t("世界存檔會保留在磁碟上")}</b>
-        {t(",不會一併刪除。")}
+        {t("移除這個伺服器實例,")}
+        <b className="text-berry">{t("世界存檔會一併永久刪除")}</b>
+        {t("。此動作無法復原。")}
+      </p>
+      <p className="text-xs text-ink-muted">
+        {t("(若伺服器檔案位於你自行指定的外部目錄,該目錄會保留。)")}
       </p>
 
       {!open ? (

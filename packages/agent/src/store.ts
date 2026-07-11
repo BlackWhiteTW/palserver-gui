@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { WorldSettingsSchema, type WorldSettings } from "@palserver/shared";
+import { WorldSettingsSchema, type WorldSettings, type EngineSettings } from "@palserver/shared";
 import { DATA_DIR } from "./env.js";
 
 export interface InstanceRecord {
@@ -22,6 +22,10 @@ export interface InstanceRecord {
    * auto-installed into. */
   serverDirManaged?: boolean;
   settings: WorldSettings;
+  /** 受管理的 Engine.ini 微調(效能/網路)。store 是這些值的權威來源:伺服器關機時
+   * 會把 Engine.ini 重寫回預設,所以不能只靠檔案。每次啟動前會把這裡的值合併回
+   * Engine.ini(見 native.ts writeIni),GUI 顯示也讀這裡而非讀檔。 */
+  engineSettings?: EngineSettings;
   createdAt: string;
   /** k8s backend: namespace of the game server StatefulSet. */
   k8sNamespace?: string;
@@ -109,7 +113,7 @@ export class InstanceStore {
 
   update(
     id: string,
-    patch: Partial<Pick<InstanceRecord, "settings" | "serverDir" | "serverDirManaged">>,
+    patch: Partial<Pick<InstanceRecord, "settings" | "serverDir" | "serverDirManaged" | "engineSettings">>,
   ): InstanceRecord {
     const rec = this.instances.get(id);
     if (!rec) throw new Error(`instance ${id} not found`);
