@@ -42,9 +42,19 @@ npx wrangler secret put GITHUB_TOKEN   # 貼上 fine-grained PAT(只需 public r
 同一個 worker 也負責發/驗贊助者識別碼(一機一碼)。端點:
 
 - `POST /api/license/activate {code, machineId}` — agent 用,驗證 + 首次綁機器(公開)
-- `POST /api/license/issue {tier?, features?, sponsor?, expiresAt?}` — 手動發碼(需 `X-Admin-Token`)
+- `POST /api/license/issue {count?, trialDays?, expiresAt?, sponsor?, features?}` — 發碼(需 `X-Admin-Token`);`count` 可一次多張,`trialDays` = 啟用後 N 天(試用碼,兌換當下才起算到期)
+- `POST /api/license/list {filter?, limit?}` — 列出識別碼(需 `X-Admin-Token`)
 - `POST /api/license/reset {code}` — 解除綁定讓贊助者換機(需 `X-Admin-Token`)
-- `POST /api/license/bmc-webhook` — Buy Me a Coffee 月費會員 webhook(自動發碼/續期)
+- `POST /api/license/delete {code}` — 撤銷(刪除)一張碼(需 `X-Admin-Token`)
+- `POST /api/license/bmc-webhook` — Buy Me a Coffee 月費會員 webhook(自動發碼/續期;信件依 BMC 語言中英日,fallback 英文)
+
+### 管理後台 UI
+
+`GET /admin`(例:`https://palserver-stats.iosoftware.workers.dev/admin`)是一個發碼/管理的網頁介面:
+輸入 `ADMIN_TOKEN` 後可**大量發試用碼**(數量、啟用後 N 天 / 固定到期 / 永久、活動標籤)、
+複製 / 下載 CSV,並在表格裡檢視、解綁、撤銷。頁面公開但所有操作都要 Token,Token 只存在該分頁。
+
+> 新增 `trial_days` 欄位:舊 DB 需 `ALTER TABLE licenses ADD COLUMN trial_days INTEGER;`(見 schema.sql)。
 
 ```bash
 # 管理密鑰(發碼/解綁用)
