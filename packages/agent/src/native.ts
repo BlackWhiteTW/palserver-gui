@@ -4,7 +4,7 @@ import os from "node:os";
 import { spawn, execFile } from "node:child_process";
 import { promisify } from "node:util";
 import extractZip from "extract-zip";
-import type { InstallError, InstanceStats, InstanceStatus } from "@palserver/shared";
+import { buildLaunchArgs, type InstallError, type InstanceStats, type InstanceStatus } from "@palserver/shared";
 import type { DriverContext, ServerDriver } from "./driver.js";
 import type { InstanceRecord } from "./store.js";
 import { renderPalWorldSettingsIni } from "./settings-ini.js";
@@ -483,7 +483,9 @@ async function spawnServer(rec: InstanceRecord, ctx: DriverContext): Promise<voi
       `-port=${rec.gamePort}`,
       // 每台唯一的 Steam 查詢埠;不帶的話全部搶 27015,第二台就死在 ::bind。
       ...(rec.queryPort ? [`-queryport=${rec.queryPort}`] : []),
-      "-publiclobby",
+      // 其餘啟動參數(publiclobby / 效能旗標 / logformat…)由使用者在面板設定;
+      // publiclobby 預設開啟(維持舊行為),見 LAUNCH_OPTIONS。
+      ...buildLaunchArgs(rec.launchOptions),
     ],
     {
       cwd: serverRoot(rec, ctx),

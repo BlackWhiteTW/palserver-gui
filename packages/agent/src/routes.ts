@@ -2,6 +2,9 @@ import type { FastifyInstance } from "fastify";
 import {
   COMMANDS,
   ENGINE_OPTIONS,
+  LAUNCH_OPTIONS,
+  LAUNCH_OPTION_KEYS,
+  type LaunchOptions,
   PALDEFENDER_OPTIONS,
   PD_MOTD_MAX_LEN,
   PD_MOTD_MAX_LINES,
@@ -1114,6 +1117,53 @@ export function registerRoutes(
     // store 是權威來源:每次啟動前會把它合併回 Engine.ini(伺服器關機會重寫該檔)。
     store.update(rec.id, { engineSettings });
     return { ...status, applied: "on-next-restart" };
+  });
+
+  // ── 命令列啟動參數(launch options)+ Steam 查詢埠 ──
+  app.get("/api/instances/:id/launch-options", async (req) => {
+    const rec = getOr404((req.params as { id: string }).id);
+    return { launchOptions: rec.launchOptions ?? {}, queryPort: rec.queryPort ?? null };
+  });
+
+  app.put("/api/instances/:id/launch-options", async (req, reply) => {
+    const rec = getOr404((req.params as { id: string }).id);
+    const loShape = Object.fromEntries(
+      LAUNCH_OPTION_KEYS.map((k) => {
+        const meta = LAUNCH_OPTIONS[k];
+        if (meta.type === "bool") return [k, z.boolean().optional()];
+        if (meta.type === "int") {
+          return [k, z.number().int().min(meta.min ?? 0).max(meta.max ?? 1_000_000).optional()];
+        }
+        return [k, z.enum(meta.choices as unknown as [string, ...string[]]).optional()];
+      }),
+    );
+    const body = z
+      .object({
+        launchOptions: z.object(loShape).strict().optional(),
+        queryPort: z.number().int().min(1024).max(65535).nullable().optional(),
+      })
+      .parse(req.body);
+
+    const patch: { launchOptions?: LaunchOptions; queryPort?: number } = {};
+    if (body.launchOptions) {
+      patch.launchOptions = { ...(rec.launchOptions ?? {}), ...(body.launchOptions as LaunchOptions) };
+    }
+    if (body.queryPort !== undefined) {
+      if (body.queryPort !== null) {
+        const clash = store.list().some((r) => r.id !== rec.id && r.queryPort === body.queryPort);
+        if (clash) {
+          return reply.code(409).send({ error: `Steam 查詢埠 ${body.queryPort} 已被其他伺服器使用` });
+        }
+      }
+      patch.queryPort = body.queryPort ?? undefined;
+    }
+    store.update(rec.id, patch);
+    const updated = store.get(rec.id)!;
+    return {
+      launchOptions: updated.launchOptions ?? {},
+      queryPort: updated.queryPort ?? null,
+      applied: "on-next-restart",
+    };
   });
 
   // ── game version & updates ──

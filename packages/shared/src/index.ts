@@ -4,6 +4,7 @@ import { WORLD_OPTIONS, type OptionMeta } from "./options.js";
 export * from "./options.js";
 export * from "./commands.js";
 export * from "./engine-options.js";
+export * from "./launch-options.js";
 export * from "./paldefender-options.js";
 export * from "./pal-stats-options.js";
 export * from "./features.js";
