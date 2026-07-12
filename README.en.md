@@ -105,7 +105,7 @@ If you hit a problem, check the **[FAQ](https://faq.toc.icu/)** first, or ask on
 
 **Other**
 - Three languages: 繁體中文 / English / 日本語; **three themes** (Palworld Classic / Silver / Aurora Emerald) **×** light / dark — Silver and Aurora Emerald are sponsor-exclusive
-- **Drag-to-reorder** server cards on the home page; tabs can be **customized (show / hide / reorder)**; the overview card can be dismissed
+- **Drag-to-reorder** server cards on the home page; tabs can be **customized (show / hide)**; the overview card can be dismissed
 - Connectivity diagnostics: detects your public IP, whether you're behind NAT/CGNAT, plus VPN (Tailscale / Radmin) hosting guides
 - Optional GUI self-update: checks GitHub Releases, verifies SHA256, swaps binaries and restarts itself
 
