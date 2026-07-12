@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FiStar, FiLock, FiX, FiExternalLink } from "react-icons/fi";
 import { GiEggClutch } from "react-icons/gi";
-import type { CustomPalInput, KnownPlayer } from "@palserver/shared";
+import { hasFeature, type CustomPalInput, type KnownPlayer } from "@palserver/shared";
 import type { AgentClient } from "./api";
 import { EntityPicker } from "./EntityPicker";
 import { MultiPicker } from "./MultiPicker";
@@ -93,7 +93,7 @@ export function CustomPalModal({
   useEffect(() => {
     client
       .license()
-      .then((l) => setEntitled(l.features.includes("custom-pal")))
+      .then((l) => setEntitled(hasFeature("custom-pal", l)))
       .catch(() => setEntitled(false));
     client.knownPlayers(instanceId).then(setPlayers).catch(() => setPlayers([]));
   }, [client, instanceId]);

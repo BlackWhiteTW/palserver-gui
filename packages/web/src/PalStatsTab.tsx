@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { FiAlertTriangle, FiDownload, FiLock, FiSave, FiStar, FiTrash2 } from "react-icons/fi";
 import { GiSheep } from "react-icons/gi";
 import {
+  hasFeature,
   PAL_ROW_VARIANTS,
   PAL_STAT_CATEGORY_LABELS,
   PAL_STAT_KEYS,
@@ -61,7 +62,7 @@ export function PalStatsTab({ client, instanceId }: { client: AgentClient; insta
   useEffect(() => {
     client
       .license()
-      .then((l) => setEntitled(l.features.includes("pal-stats")))
+      .then((l) => setEntitled(hasFeature("pal-stats", l)))
       .catch(() => setEntitled(false));
   }, [client, instanceId]);
 
@@ -99,7 +100,7 @@ export function PalStatsTab({ client, instanceId }: { client: AgentClient; insta
 
   if (!status.schema.supported) {
     return (
-      <div className="rounded-(--radius-cute) border-2 border-dashed border-line px-6 py-12 text-center text-ink-muted">
+      <div className="rounded-cute border-2 border-dashed border-line px-6 py-12 text-center text-ink-muted">
         <GiSheep className="mx-auto mb-2 size-11" />
         <p className="mt-1 text-[13px]">{status.schema.reason ?? status.reason}</p>
       </div>
@@ -307,7 +308,7 @@ export function PalStatsTab({ client, instanceId }: { client: AgentClient; insta
                 </div>
               ))}
 
-              <div className="sticky bottom-4 flex flex-wrap items-center justify-between gap-3 rounded-(--radius-cute) border-2 border-sun/50 bg-card p-3 shadow-(--shadow-cute)">
+              <div className="sticky bottom-4 flex flex-wrap items-center justify-between gap-3 rounded-cute border-2 border-sun/50 bg-card p-3 shadow-(--shadow-cute)">
                 <span className="text-[13px] font-bold text-ink-muted">
                   {t("儲存後要重啟伺服器,才會套用到新遭遇的帕魯。")}
                 </span>
