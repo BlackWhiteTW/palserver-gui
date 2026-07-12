@@ -256,16 +256,17 @@ export async function getPdPlayers(rec: InstanceRecord, ctx: DriverContext): Pro
   }
 }
 
-/** 公會 + 據點(PalDefender /guilds)。前端拿據點的 world_pos 走 savToMap 畫到地圖。
- * detailed=false(非贊助者)時只回據點位置,清掉名稱/等級/成員等細節。 */
+/** 公會 + 據點(PalDefender /guilds)。整個功能是贊助者限定:非贊助者(detailed=false)
+ * 直接拿不到任何公會資料。前端拿據點的 world_pos 走 savToMap 畫到地圖。 */
 export async function getPdGuilds(
   rec: InstanceRecord,
   ctx: DriverContext,
   detailed: boolean,
 ): Promise<PdGuildList> {
+  if (!detailed) return { available: true, detailed: false, guilds: [] };
   const status = getPdRestStatus(rec, ctx);
   if (!status.enabled) {
-    return { available: false, detailed, reason: status.reason, guilds: [] };
+    return { available: false, detailed: true, reason: status.reason, guilds: [] };
   }
   const dir = pdDir(rec, ctx)!;
   try {
@@ -274,16 +275,6 @@ export async function getPdGuilds(
       const g = (raw ?? {}) as Record<string, unknown>;
       const admin = (g.admin ?? {}) as Record<string, unknown>;
       const camps = Array.isArray(g.camps) ? (g.camps as Record<string, unknown>[]) : [];
-      const bases = camps
-        .map((c) => {
-          const world = ((c ?? {}).world_pos ?? {}) as Record<string, unknown>;
-          return { id: String((c ?? {}).id ?? ""), worldX: Number(world.x), worldY: Number(world.y) };
-        })
-        .filter((b) => Number.isFinite(b.worldX) && Number.isFinite(b.worldY));
-      // 非贊助者:只保留 id 與據點位置,細節一律清空。
-      if (!detailed) {
-        return { id, name: "", level: 0, adminName: "", memberCount: 0, members: [], bases };
-      }
       return {
         id,
         name: String(g.name ?? ""),
@@ -291,12 +282,17 @@ export async function getPdGuilds(
         adminName: String(admin.name ?? ""),
         memberCount: Number(g.member_count ?? (Array.isArray(g.members) ? g.members.length : 0)),
         members: Array.isArray(g.members) ? g.members.map(String) : [],
-        bases,
+        bases: camps
+          .map((c) => {
+            const world = ((c ?? {}).world_pos ?? {}) as Record<string, unknown>;
+            return { id: String((c ?? {}).id ?? ""), worldX: Number(world.x), worldY: Number(world.y) };
+          })
+          .filter((b) => Number.isFinite(b.worldX) && Number.isFinite(b.worldY)),
       };
     });
-    return { available: true, detailed, guilds };
+    return { available: true, detailed: true, guilds };
   } catch (err) {
-    return { available: false, detailed, reason: err instanceof Error ? err.message : String(err), guilds: [] };
+    return { available: false, detailed: true, reason: err instanceof Error ? err.message : String(err), guilds: [] };
   }
 }
 

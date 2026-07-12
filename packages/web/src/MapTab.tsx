@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FiRefreshCw, FiMap, FiX, FiHome } from "react-icons/fi";
+import { FiRefreshCw, FiMap, FiX, FiHome, FiUsers } from "react-icons/fi";
 import * as L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -62,11 +62,12 @@ export function MapTab({ client, instanceId }: { client: AgentClient; instanceId
   const gameData = useGameData();
   const [live, setLive] = useState<LiveStatus | null>(null);
   const [guilds, setGuilds] = useState<PdGuild[]>([]);
-  const [guildsDetailed, setGuildsDetailed] = useState(false);
   const [guildDetailId, setGuildDetailId] = useState<string | null>(null);
   const [playerDetail, setPlayerDetail] = useState<{ id: string; label: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [showPlayers, setShowPlayers] = useState(true);
+  const [showBases, setShowBases] = useState(true);
 
   const refresh = useCallback(async () => {
     try {
@@ -75,14 +76,10 @@ export function MapTab({ client, instanceId }: { client: AgentClient; instanceId
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-    // 公會據點來自 PalDefender REST(沒開就沒有,靜默略過,不擋地圖)。
-    // detailed = 有贊助者授權,可看名稱/成員;沒授權只拿得到據點位置。
+    // 公會據點整個功能是贊助者限定:非贊助者這裡回空陣列,地圖就不顯示任何據點。
     client
       .guilds(instanceId)
-      .then((g) => {
-        setGuilds(g.available ? g.guilds : []);
-        setGuildsDetailed(g.detailed);
-      })
+      .then((g) => setGuilds(g.available ? g.guilds : []))
       .catch(() => setGuilds([]));
   }, [client, instanceId]);
 
@@ -93,6 +90,7 @@ export function MapTab({ client, instanceId }: { client: AgentClient; instanceId
   }, [refresh]);
 
   const baseCount = guilds.reduce((s, g) => s + g.bases.length, 0);
+  const hasBases = baseCount > 0;
   const summary = live?.available
     ? t("在線玩家 {n} 人", { n: live.players.length }) + (baseCount > 0 ? ` · ${t("{n} 個公會據點", { n: baseCount })}` : "")
     : (live?.reason ?? t("伺服器未在運作,地圖無法顯示玩家。"));
@@ -124,8 +122,23 @@ export function MapTab({ client, instanceId }: { client: AgentClient; instanceId
             className="flex h-[min(88vh,92vw)] w-[min(88vh,92vw)] max-w-full flex-col gap-2 rounded-(--radius-cute) border-2 border-line bg-card p-3 shadow-(--shadow-cute)"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-[13px] font-bold text-ink-muted">{summary}</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  className={`${btnGhost} inline-flex items-center gap-1.5 ${showPlayers ? "border-pal text-pal" : "opacity-60"}`}
+                  onClick={() => setShowPlayers((v) => !v)}
+                >
+                  <FiUsers className="size-4" /> {t("玩家")}
+                </button>
+                {hasBases && (
+                  <button
+                    className={`${btnGhost} inline-flex items-center gap-1.5 ${showBases ? "border-pal text-pal" : "opacity-60"}`}
+                    onClick={() => setShowBases((v) => !v)}
+                  >
+                    <FiHome className="size-4" /> {t("公會據點")}
+                  </button>
+                )}
+              </div>
               <div className="flex gap-2">
                 <button className={btnGhost} onClick={refresh} aria-label={t("重新整理")}>
                   <FiRefreshCw className="size-4" />
@@ -139,9 +152,10 @@ export function MapTab({ client, instanceId }: { client: AgentClient; instanceId
               <PlayerMap
                 players={live.players}
                 guilds={guilds}
-                detailed={guildsDetailed}
+                showPlayers={showPlayers}
+                showBases={showBases}
                 gameData={gameData}
-                onGuildClick={guildsDetailed ? setGuildDetailId : undefined}
+                onGuildClick={setGuildDetailId}
                 onPlayerClick={(id, label) => setPlayerDetail({ id, label })}
               />
             </div>
@@ -283,16 +297,16 @@ function Info({ label, value }: { label: string; value: string }) {
 function PlayerMap({
   players,
   guilds,
-  detailed,
+  showPlayers,
+  showBases,
   gameData,
   onGuildClick,
   onPlayerClick,
 }: {
   players: RestPlayer[];
   guilds: PdGuild[];
-  /** Whether guild details are unlocked (sponsor). If false, bases are shown as
-   * plain grey markers with no name/details and no click-through. */
-  detailed: boolean;
+  showPlayers: boolean;
+  showBases: boolean;
   gameData: GameData | null;
   onGuildClick?: (guildId: string) => void;
   /** Open the full player-detail view (same as the player list). */
@@ -361,38 +375,37 @@ function PlayerMap({
     const guildOf = (p: RestPlayer) => guildByMember.get(p.playerId) ?? guildByMember.get(p.userId);
 
     // Guild bases first (under players). world_pos → savToMap, same frame.
-    // Sponsors get a coloured, named, clickable base; others see only a grey
-    // position marker (a base is here, but not whose or its details).
-    for (const g of guilds) {
-      const color = detailed ? guildColor(g.id) : "#8a94a3";
-      for (const b of g.bases) {
-        const { x, y } = savToMap(b.worldX, b.worldY);
-        const icon = L.divIcon({
-          className: "pmap-base-wrap",
-          iconSize: [26, 26],
-          iconAnchor: [13, 13],
-          tooltipAnchor: [0, -13],
-          html:
-            `<span class="pmap-base" style="background:${color}">` +
-            `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>` +
-            `</span>`,
-        });
-        const marker = L.marker([y, x], { icon });
-        marker.bindTooltip(
-          detailed
-            ? `<div style="font-weight:800">${escapeHtml(g.name || "—")}</div>` +
-                `<div>${t("公會據點")} · Lv.${g.level} · ${t("{n} 名成員", { n: g.memberCount })}</div>`
-            : `<div>${t("公會據點(贊助者可看詳情)")}</div>`,
-          { direction: "top", className: "pmap-detail" },
-        );
-        if (detailed && onGuildClickRef.current) {
+    // The whole guild feature is sponsor-only, so if we have any guild data the
+    // viewer is a sponsor — bases are always coloured, named, and clickable.
+    if (showBases) {
+      for (const g of guilds) {
+        const color = guildColor(g.id);
+        for (const b of g.bases) {
+          const { x, y } = savToMap(b.worldX, b.worldY);
+          const icon = L.divIcon({
+            className: "pmap-base-wrap",
+            iconSize: [26, 26],
+            iconAnchor: [13, 13],
+            tooltipAnchor: [0, -13],
+            html:
+              `<span class="pmap-base" style="background:${color}">` +
+              `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>` +
+              `</span>`,
+          });
+          const marker = L.marker([y, x], { icon });
+          marker.bindTooltip(
+            `<div style="font-weight:800">${escapeHtml(g.name || "—")}</div>` +
+              `<div>${t("公會據點")} · Lv.${g.level} · ${t("{n} 名成員", { n: g.memberCount })}</div>`,
+            { direction: "top", className: "pmap-detail" },
+          );
           marker.on("click", () => onGuildClickRef.current?.(g.id));
+          marker.addTo(group);
         }
-        marker.addTo(group);
       }
     }
 
-    for (const p of players) {
+    if (showPlayers)
+      for (const p of players) {
       const { x, y } = savToMap(p.location_x, p.location_y);
       const iconUrl = avatarIconUrl(p.userId, gameData);
       const guild = guildOf(p);
@@ -419,7 +432,7 @@ function PlayerMap({
       marker.on("click", () => onPlayerClickRef.current?.(p.userId, p.name));
       group.addLayer(marker);
     }
-  }, [players, guilds, detailed, gameData]);
+  }, [players, guilds, showPlayers, showBases, gameData]);
 
   return <div ref={containerRef} className="h-full w-full rounded-xl bg-card-soft" />;
 }
