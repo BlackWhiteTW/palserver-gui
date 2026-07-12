@@ -179,9 +179,11 @@ export function registerRoutes(
       instanceCount: store.list().length,
       authenticated,
       platform: process.platform,
-      availableBackends: process.platform === "linux"
+      // docker:看 Docker 是否真的連得上(Docker Desktop 讓 macOS/Windows 也能跑),
+      // 而非以平台判斷;k8s:遙控叢集內的 StatefulSet,與 agent 這台的 OS 無關,一律提供。
+      availableBackends: dockerVersion !== "unavailable"
         ? ["native", "docker", "k8s"]
-        : ["native"],
+        : ["native", "k8s"],
     };
   });
 
