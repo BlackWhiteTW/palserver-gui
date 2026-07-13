@@ -69,34 +69,49 @@ export function useHiddenTabs(): [Tab[], (ids: Tab[]) => void] {
   return [hidden, (ids) => setHiddenTabs(ids)];
 }
 
-/** 總覽頁上可隱藏的卡片(可在設定裡恢復)。 */
-export type OverviewCard = "migration" | "invite" | "ports";
-export const OVERVIEW_CARDS: { id: OverviewCard; label: string }[] = [
+/**
+ * 可隱藏的卡片與警告(按叉叉收起,可在設定→「卡片隱藏」恢復)。
+ * 兩類共用同一份 localStorage 清單,id 為任意字串;新增可關閉的警告時,
+ * 在 DISMISSIBLE_WARNINGS 補一筆(id 以 "warn-" 開頭),設定頁就會自動列出可恢復。
+ */
+export type OverviewCard = string;
+export const OVERVIEW_CARDS: { id: string; label: string }[] = [
   { id: "migration", label: "存檔遷移" },
   { id: "invite", label: "邀請朋友加入" },
   { id: "ports", label: "多台伺服器埠提醒" },
 ];
 
+/** 各分頁上「常駐資訊型」黃色警告 —— 包一層 <DismissibleWarning> 即可按叉叉收起。 */
+export const DISMISSIBLE_WARNINGS: { id: string; label: string }[] = [
+  { id: "warn-mods-compat", label: "模組:改版相容性提醒" },
+  { id: "warn-palstats-risk", label: "帕魯數值:mod 風險提示" },
+];
+
+/** 所有可隱藏項目的 id→label(設定頁用來列出目前已隱藏的項目)。 */
+export const DISMISSIBLE_LABELS: Record<string, string> = Object.fromEntries(
+  [...OVERVIEW_CARDS, ...DISMISSIBLE_WARNINGS].map((c) => [c.id, c.label]),
+);
+
 const CARD_KEY = "palserver.hiddenCards";
 const CARD_EVENT = "palserver:cardprefs";
 
-export function getHiddenCards(): OverviewCard[] {
+export function getHiddenCards(): string[] {
   try {
     const v = JSON.parse(localStorage.getItem(CARD_KEY) ?? "[]");
-    return Array.isArray(v) ? (v as OverviewCard[]) : [];
+    return Array.isArray(v) ? (v as string[]) : [];
   } catch {
     return [];
   }
 }
 
-export function setHiddenCards(ids: OverviewCard[]): void {
+export function setHiddenCards(ids: string[]): void {
   localStorage.setItem(CARD_KEY, JSON.stringify(ids));
   window.dispatchEvent(new Event(CARD_EVENT));
 }
 
 /** 訂閱隱藏卡片偏好。回傳目前值與更新函式。 */
-export function useHiddenCards(): [OverviewCard[], (ids: OverviewCard[]) => void] {
-  const [hidden, setHidden] = useState<OverviewCard[]>(getHiddenCards);
+export function useHiddenCards(): [string[], (ids: string[]) => void] {
+  const [hidden, setHidden] = useState<string[]>(getHiddenCards);
   useEffect(() => {
     const onChange = () => setHidden(getHiddenCards());
     window.addEventListener(CARD_EVENT, onChange);

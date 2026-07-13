@@ -4,7 +4,15 @@ import type { InstanceDetail } from "@palserver/shared";
 import type { AgentClient } from "./api";
 import { CopyPath } from "./CopyPath";
 import { LaunchOptionsCard } from "./LaunchOptionsCard";
-import { TABS, LOCKED_TABS, OVERVIEW_CARDS, useHiddenTabs, useHiddenCards, type Tab } from "./tabPrefs";
+import {
+  TABS,
+  LOCKED_TABS,
+  OVERVIEW_CARDS,
+  DISMISSIBLE_WARNINGS,
+  useHiddenTabs,
+  useHiddenCards,
+  type Tab,
+} from "./tabPrefs";
 import { t, useI18n } from "./i18n";
 import { btn, btnDanger, btnGhost, card, errorCls, inputCls, labelCls } from "./ui";
 
@@ -102,34 +110,40 @@ function TabVisibilityCard() {
   );
 }
 
-/** 恢復被隱藏的總覽卡片(存檔遷移 / 邀請朋友加入)。 */
+/** 恢復被按叉叉收起的卡片與警告(總覽卡片、各分頁的黃色提醒)。 */
 function OverviewCardsCard() {
   useI18n();
   const [hidden, setHidden] = useHiddenCards();
-  const toggle = (id: (typeof OVERVIEW_CARDS)[number]["id"]) =>
+  const toggle = (id: string) =>
     setHidden(hidden.includes(id) ? hidden.filter((x) => x !== id) : [...hidden, id]);
+
+  const section = (title: string, items: { id: string; label: string }[]) => (
+    <div className="flex flex-col gap-2">
+      <p className="text-[12px] font-bold text-ink-muted">{t(title)}</p>
+      {items.map((c) => (
+        <label key={c.id} className="inline-flex cursor-pointer items-center gap-2 text-[13px] font-bold">
+          <input
+            type="checkbox"
+            className="size-4 accent-pal"
+            checked={!hidden.includes(c.id)}
+            onChange={() => toggle(c.id)}
+          />
+          {t(c.label)}
+        </label>
+      ))}
+    </div>
+  );
 
   return (
     <div className={`${card} flex flex-col gap-3`}>
       <h3 className="inline-flex items-center gap-2 text-sm font-extrabold">
-        <FiLayout className="size-4 text-pal" /> {t("總覽卡片")}
+        <FiLayout className="size-4 text-pal" /> {t("卡片隱藏")}
       </h3>
       <p className="text-[13px] text-ink-muted">
-        {t("勾選要在總覽頁顯示的卡片。這些卡片也可以直接在總覽頁點右上角的 × 隱藏。")}
+        {t("取消勾選即可隱藏對應的卡片或提醒;這些也可以直接在畫面上點右上角的 × 收起,再回這裡勾回來。")}
       </p>
-      <div className="flex flex-col gap-2">
-        {OVERVIEW_CARDS.map((c) => (
-          <label key={c.id} className="inline-flex cursor-pointer items-center gap-2 text-[13px] font-bold">
-            <input
-              type="checkbox"
-              className="size-4 accent-pal"
-              checked={!hidden.includes(c.id)}
-              onChange={() => toggle(c.id)}
-            />
-            {t(c.label)}
-          </label>
-        ))}
-      </div>
+      {section("總覽卡片", OVERVIEW_CARDS)}
+      {section("提醒訊息", DISMISSIBLE_WARNINGS)}
     </div>
   );
 }

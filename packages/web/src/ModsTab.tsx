@@ -5,7 +5,7 @@ import type { ModComponent, ModsStatus } from "@palserver/shared";
 import type { AgentClient } from "./api";
 import { FileBrowserDialog } from "./FileManager";
 import { t, useI18n } from "./i18n";
-import { btn, btnGhost, card, errorCls } from "./ui";
+import { btn, btnGhost, card, errorCls, DismissibleWarning } from "./ui";
 
 const COMPONENTS: {
   id: ModComponent;
@@ -134,12 +134,14 @@ export function ModsTab({
   return (
     <div className="flex flex-col gap-4">
       {error && <p className={errorCls}>{error}</p>}
-      <p className="inline-flex items-start gap-2 rounded-xl border-2 border-sun/40 bg-sun/10 px-3 py-2 text-[13px] text-sun">
-        <FiAlertTriangle className="mt-0.5 size-4 shrink-0" />
-        <span>
-          {t("每次")} <b>{t("Palworld 改版")}</b>{t("後,PalDefender / UE4SS 常會")}<b>{t("暫時無法使用")}</b>{t(",要等模組作者釋出相容版本(通常改版後幾天內)。若改版後伺服器啟動異常或閃退,先回這裡")}<b>{t("更新到最新版")}</b>{t(",或先")}<b>{t("移除")}</b>{t("模組再開服。")}
+      <DismissibleWarning id="warn-mods-compat">
+        <span className="inline-flex items-start gap-2">
+          <FiAlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <span>
+            {t("每次")} <b>{t("Palworld 改版")}</b>{t("後,PalDefender / UE4SS 常會")}<b>{t("暫時無法使用")}</b>{t(",要等模組作者釋出相容版本(通常改版後幾天內)。若改版後伺服器啟動異常或閃退,先回這裡")}<b>{t("更新到最新版")}</b>{t(",或先")}<b>{t("移除")}</b>{t("模組再開服。")}
+          </span>
         </span>
-      </p>
+      </DismissibleWarning>
       {running && (
         <p className="rounded-xl bg-sun/10 px-3 py-2 text-[13px] font-bold text-sun">
           {t("伺服器運作中:安裝、更新或移除模組需要先停止伺服器(執行中時模組檔案被鎖定)。")}
