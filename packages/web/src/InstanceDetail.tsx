@@ -529,7 +529,6 @@ function LogsTab({ client, instanceId }: { client: AgentClient; instanceId: stri
     if (entitled !== true || !prefs.translate) return;
     const tlv = translateTarget();
     if (tlv === "en") return;
-    let cancelled = false;
     // 收集近 300 行裡還沒翻的句子(去重)。
     const need: string[] = [];
     const seen = new Set<string>();
@@ -549,20 +548,22 @@ function LogsTab({ client, instanceId }: { client: AgentClient; instanceId: stri
       need.push(q);
     }
     if (!need.length) return;
-    need.forEach((q) => transRef.current.set(`${tlv}\n${q}`, "")); // 佔位避免重複請求
+    need.forEach((q) => transRef.current.set(`${tlv}\n${q}`, "")); // 佔位避免同句重複請求
+    // 注意:不要因 effect 重跑(串流每來一行就重跑)而丟棄結果 —— transRef 是持久的 ref,
+    // 一律寫回快取才不會讓在途批次的譯文被孤兒化。翻到的寫回;失敗/空的移除佔位讓下次重試。
     (async () => {
       try {
         const r = await client.translateBatch(need, tlv);
-        if (cancelled) return;
-        need.forEach((q, i) => transRef.current.set(`${tlv}\n${q}`, r.texts[i] || ""));
-        bumpTrans((v) => v + 1);
+        need.forEach((q, i) => {
+          const val = r.texts[i] || "";
+          if (val) transRef.current.set(`${tlv}\n${q}`, val);
+          else transRef.current.delete(`${tlv}\n${q}`);
+        });
       } catch {
-        /* 整批失敗:佔位留著避免狂重試,語言/開關變動時再試 */
+        need.forEach((q) => transRef.current.delete(`${tlv}\n${q}`));
       }
+      bumpTrans((v) => v + 1);
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [entitled, prefs.translate, prefs.format, lines, client]);
 
   useEffect(() => {
