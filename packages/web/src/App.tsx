@@ -403,9 +403,30 @@ function CreateDialog({
           {t("運行方式")}
           <Select value={backend} onChange={(e) => setBackend(e.target.value as "native" | "docker" | "k8s")}>
             <option value="native" disabled={!availableBackends.includes("native")}>{t("原生(直接在這台主機上運行,推薦)")}</option>
-            <option value="docker" disabled={!availableBackends.includes("docker")}>{t("Docker 容器(beta)")}</option>
+            <option
+              value="docker"
+              disabled={!availableBackends.includes("docker")}
+              title={
+                !availableBackends.includes("docker")
+                  ? platform === "win32"
+                    ? t("Windows 的 WSL2 UDP 不支援遊戲伺服器,請改用原生或管理遠端 k8s 實例")
+                    : t("未偵測到 Docker,請先安裝並啟動 Docker")
+                  : undefined
+              }
+            >
+              {t("Docker 容器(beta)")}
+              {!availableBackends.includes("docker")
+                ? platform === "win32"
+                  ? t("(Windows 不支援,請用原生或遠端 k8s)")
+                  : t("(未偵測到 Docker)")
+                : platform === "darwin"
+                  ? t("(非 x86 平台未經驗證)")
+                  : ""}
+            </option>
             {advancedMode && (
-              <option value="k8s" disabled={!availableBackends.includes("k8s")}>{t("Kubernetes(beta)")}</option>
+              <option value="k8s" disabled={!availableBackends.includes("k8s")}>
+                {t("Kubernetes(beta)")}{t("(遠端管理,不在本機運行)")}
+              </option>
             )}
           </Select>
         </label>
