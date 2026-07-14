@@ -10,7 +10,9 @@ export interface GameEntity {
   name: string;
   /** Traditional-Chinese name where known; extend the catalogs to add more */
   zh?: string;
-  /** Simplified-Chinese name where known(scripts/fetch-zh-cn.mjs 由 paldb.cc /cn/ 抓) */
+  /** Simplified-Chinese name where known; generated from the reviewed Traditional-Chinese name */
+  "zh-CN"?: string;
+  /** Upstream Simplified-Chinese field; reviewed zh-CN takes precedence when both exist. */
   zhCN?: string;
   /** Japanese name where known(scripts/fetch-game-data-i18n.mjs 由 paldb.cc 抓) */
   ja?: string;
@@ -25,8 +27,8 @@ export interface GameEntity {
 /** Preferred display name for the current UI language (fallback: English). */
 export const displayName = (e: GameEntity) => {
   const lang = getLang();
-  if (lang === "zh-CN") return e.zhCN ?? e.zh ?? e.name;
   if (lang === "zh") return e.zh ?? e.name;
+  if (lang === "zh-CN") return e["zh-CN"] ?? e.zhCN ?? e.zh ?? e.name;
   if (lang === "ja") return e.ja ?? e.name;
   return e.name;
 };
@@ -70,6 +72,14 @@ function build([pals, items, passives, activeSkills]: Catalogs): GameData {
   };
 }
 
+function preserveSimplified(catalog: GameEntity[], fallback: GameEntity[]): GameEntity[] {
+  const fallbackById = new Map(fallback.map((entry) => [entry.id, entry["zh-CN"]]));
+  return catalog.map((entry) => {
+    const reviewed = entry["zh-CN"] ?? fallbackById.get(entry.id);
+    return reviewed ? { ...entry, "zh-CN": reviewed } : entry;
+  });
+}
+
 async function fetchCatalogs(base: string, opts?: RequestInit): Promise<Catalogs> {
   const one = (file: string) =>
     fetch(`${base}${file}`, opts).then((r) => r.json() as Promise<GameEntity[]>);
@@ -99,10 +109,16 @@ async function refreshFromRemote(): Promise<void> {
   if (refreshed) return;
   refreshed = true;
   try {
-    const fresh = await fetchCatalogs(REMOTE_BASE, {
+    const remote = await fetchCatalogs(REMOTE_BASE, {
       cache: "no-cache",
       signal: AbortSignal.timeout(15000),
     });
+    const fresh: Catalogs = [
+      preserveSimplified(remote[0], cache?.pals ?? []),
+      preserveSimplified(remote[1], cache?.items ?? []),
+      preserveSimplified(remote[2], cache?.passives ?? []),
+      preserveSimplified(remote[3], cache?.activeSkills ?? []),
+    ];
     const [pals, items] = fresh;
     if (
       Array.isArray(pals) &&

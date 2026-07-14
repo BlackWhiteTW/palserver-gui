@@ -41,7 +41,9 @@ export function EntityPicker({
           (e) =>
             e.name.toLowerCase().includes(q) ||
             e.id.toLowerCase().includes(q) ||
-            e.zh?.includes(query.trim()),
+            e.zh?.includes(query.trim()) ||
+            e["zh-CN"]?.includes(query.trim()) ||
+            e.zhCN?.includes(query.trim()),
         )
       : catalog;
     return list.slice(0, 60);

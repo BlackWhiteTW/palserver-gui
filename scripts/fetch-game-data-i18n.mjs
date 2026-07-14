@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
  * 從 paldb.cc 抓帕魯/道具的多語言名稱,合併進
- * packages/web/public/game-data/{items,pals}.json 的 name(en)/zh/ja 欄位。
+ * packages/web/public/game-data/{items,pals}.json 的 name(en)/zh/zh-CN/ja 欄位。
  *
- * 資料來源:paldb.cc 的 /en、/tw、/ja 索引頁(維護者為 paldb.cc 貢獻者,
+ * 資料來源:paldb.cc 的 /en、/tw、/cn、/ja 索引頁(維護者為 paldb.cc 貢獻者,
  * 已獲同意抓取;見 public/game-data/CREDITS.md)。
  *
  * 用法:node scripts/fetch-game-data-i18n.mjs
@@ -19,6 +19,7 @@ const UA = "palserver-gui-data-sync (maintainer-approved; github.com/io-software
 const LANGS = [
   ["en", "en"],
   ["tw", "zh"],
+  ["cn", "zh-CN"],
   ["ja", "ja"],
 ];
 
@@ -71,15 +72,18 @@ async function updateCatalog(file, page, kind) {
     }
     stats[field] = { filled, missing };
   }
-  // 欄位順序固定(id, name, icon, zh, ja),diff 才好讀。
-  const ordered = catalog.map(({ id, name, icon, zh, ja, ...rest }) => ({
-    id,
-    name,
-    ...(icon ? { icon } : {}),
-    ...(zh ? { zh } : {}),
-    ...(ja ? { ja } : {}),
-    ...rest,
-  }));
+  // 欄位順序固定(id, name, icon, zh, zh-CN, ja),diff 才好讀。
+  const ordered = catalog.map(
+    ({ id, name, icon, zh, "zh-CN": zhCN, ja, ...rest }) => ({
+      id,
+      name,
+      ...(icon ? { icon } : {}),
+      ...(zh ? { zh } : {}),
+      ...(zhCN ? { "zh-CN": zhCN } : {}),
+      ...(ja ? { ja } : {}),
+      ...rest,
+    }),
+  );
   await writeFile(path.join(DATA_DIR, file), JSON.stringify(ordered) + "\n");
   console.log(`${file}: ${catalog.length} entries`, stats);
 }
