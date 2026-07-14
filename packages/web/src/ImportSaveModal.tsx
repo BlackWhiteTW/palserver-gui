@@ -14,17 +14,17 @@ const SOURCE_OPTIONS: { kind: SourceKind; label: string; hint: string }[] = [
   {
     kind: "dedicated",
     label: "其他專用伺服器",
-    hint: "到舊伺服器的 Pal/Saved/SaveGames/0/ 找到世界資料夾(一串英數字 GUID),把它(或其任一上層目錄)的完整路徑貼到下面。",
+    hint: "把舊伺服器的資料夾路徑貼上來就可以 — 存檔資料夾或整個伺服器目錄都行,掃描會自動找到世界存檔。",
   },
   {
     kind: "v1",
     label: "舊版 1.0 GUI",
-    hint: "在 v1 介面按「開啟伺服器資料夾」,把那個伺服器目錄的路徑貼到下面。小提示:v1 伺服器在同一台機器時,也可以改用「建立伺服器」時填「既有伺服器路徑」直接原地收編,連搬都不用搬。",
+    hint: "把 v1 的伺服器資料夾路徑貼上來就可以(在 v1 介面按「開啟伺服器資料夾」就能找到)。小提示:v1 伺服器在同一台機器時,也可以改用「建立伺服器」時填「既有伺服器路徑」直接原地收編,連搬都不用搬。",
   },
   {
     kind: "coop",
     label: "本機共玩存檔",
-    hint: "本機(四人邀請碼)存檔在 %LOCALAPPDATA%\\Pal\\Saved\\SaveGames\\<SteamID>\\ 底下。主機玩家的角色需要過戶,GUI 已內建工具:建立後讓主機玩家先加入一次,再到「存檔備份」分頁按「修復主機角色」即可。",
+    hint: "把共玩存檔的資料夾路徑貼上來就可以,它在 %LOCALAPPDATA%\\Pal\\Saved\\SaveGames\\ 底下。主機玩家的角色需要過戶,GUI 已內建工具:建立後讓主機玩家先加入一次,再到「存檔備份」分頁按「修復主機角色」即可。",
   },
 ];
 
@@ -105,7 +105,7 @@ export function ImportSaveModal({
         <div className="flex gap-2">
           <input
             className={`${inputCls} flex-1`}
-            placeholder={t("貼上存檔所在的資料夾路徑(在跑 agent 的那台機器上)")}
+            placeholder={t("貼上存檔或伺服器的資料夾路徑,都可以")}
             value={sourcePath}
             onChange={(e) => setSourcePath(e.target.value)}
             onKeyDown={(e) => {
