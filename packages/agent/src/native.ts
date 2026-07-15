@@ -292,8 +292,15 @@ const FILE_LOCKED_RE = /being used by another process/i;
  *  殘留在背景鎖住 dbghelp.dll / steam_api64.dll —— 它不是我們追蹤的行程,
  *  GUI 判定「已停止」,但 DepotDownloader 開檔會 IOException(exit 0xE0434352)、
  *  重灌刪檔會 EPERM。更新/重灌前先清場,清掉的行程記進日誌。 */
-async function killLeftoverProcessesUnder(root: string, appendLog: (line: string) => void): Promise<void> {
+async function killLeftoverProcessesUnder(
+  rec: InstanceRecord,
+  root: string,
+  appendLog: (line: string) => void,
+): Promise<void> {
   if (!IS_WIN) return;
+  // adopt(使用者自帶目錄)不清場:該目錄下的行程可能是使用者自己手動啟動的
+  // 伺服器,誤殺代價太高;agent 自管目錄下的行程必然是我們(或遊戲)生的,才砍。
+  if (rec.serverDir && !rec.serverDirManaged) return;
   try {
     const psRoot = root.replace(/'/g, "''");
     const stdout = await new Promise<string>((resolve, reject) => {
@@ -607,7 +614,7 @@ export function updateServer(rec: InstanceRecord, ctx: DriverContext, fresh = fa
       appendLog(fresh ? "[palserver] 開始重灌伺服器(刪除本體後重新下載)…" : "[palserver] 開始更新伺服器…");
       // 先清掉鎖住伺服器檔案的殘留行程(崩潰後的 CrashReportClient / 殭屍 PalServer),
       // 否則 DepotDownloader 開檔 IOException、重灌刪檔 EPERM
-      await killLeftoverProcessesUnder(serverRoot(rec, ctx), appendLog);
+      await killLeftoverProcessesUnder(rec, serverRoot(rec, ctx), appendLog);
       if (fresh) wipeGameFiles(serverRoot(rec, ctx), appendLog);
       await runDepotDownloaderWithRecovery(serverRoot(rec, ctx), appendLog, (pct) =>
         installProgress.set(rec.id, pct),
@@ -800,11 +807,20 @@ export const nativeDriver: ServerDriver = {
   },
 
   async stop(rec, ctx) {
+    // 停止時一律順手清掉「執行檔在本實例伺服器目錄下」的殘留行程:
+    // 崩潰後的 CrashReportClient / 殭屍 PalServer 不在 pid 檔追蹤範圍,
+    // 卻會鎖住 dbghelp.dll 等檔案,擋住之後的更新/重灌。
+    const sweepLeftovers = () =>
+      killLeftoverProcessesUnder(rec, serverRoot(rec, ctx), (line) =>
+        fs.appendFileSync(logFile(ctx), line + "\n"),
+      );
+
     const { alive, pid } = await checkAlive(ctx);
     // 沒在跑(或 pid 檔的號碼已被別的行程重用)→ 只清掉 pid 檔,絕不 taskkill。
     // 這正是「動一台卻關掉另一台」的根因:陳舊 pid 檔 + Windows PID 重用。
     if (!alive || pid === null) {
       fs.rmSync(pidFile(ctx), { force: true });
+      await sweepLeftovers();
       return;
     }
 
@@ -823,6 +839,7 @@ export const nativeDriver: ServerDriver = {
       if (stillOurs && isPalServer) await killTree(pid);
     }
     fs.rmSync(pidFile(ctx), { force: true });
+    await sweepLeftovers();
   },
 
   async remove(rec, ctx) {
