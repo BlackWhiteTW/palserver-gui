@@ -13,6 +13,7 @@ import { PalDefenderTab } from "./PalDefenderTab";
 import { PalStatsTab } from "./PalStatsTab";
 import { PlayersTab } from "./PlayersTab";
 import { GuildsTab } from "./GuildsTab";
+import { LeaderboardTab } from "./LeaderboardTab";
 import { MapTab } from "./MapTab";
 import { ConsoleTab } from "./ConsoleTab";
 import { SavesTab } from "./SavesTab";
@@ -338,6 +339,7 @@ export function InstanceDetailPage({
           }}
         />
       )}
+      {tab === "leaderboard" && <LeaderboardTab client={client} instanceId={detail.id} />}
       {tab === "map" && <MapTab client={client} instanceId={detail.id} externalFocus={mapFocus} />}
       {tab === "settings" && (
         <SettingsEditor

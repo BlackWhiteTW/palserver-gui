@@ -748,6 +748,9 @@ export interface SavePlayerProfile {
   /** 加點分配:存檔內部名稱(日文,如「最大HP」)→ 點數;UI 負責在地化 */
   statusPoints?: { name: string; points: number }[];
   unusedStatusPoints?: number | null;
+  /** 圖鑑捕捉紀錄:曾捕捉過的物種 characterId 清單(玩家 .sav 的 RecordData.PalCaptureCount)。
+   *  解析不到(舊快照/玩家檔壞掉)為 null。 */
+  paldeck?: string[] | null;
 }
 
 export interface SaveGuildWorkerPal {
@@ -784,6 +787,46 @@ export interface SavePlayersSummary {
   generatedAt: string | null;
   levelSavMtime: string | null;
   players: Omit<SavePlayerProfile, "pals">[];
+}
+
+/** 每次掃描落地的精簡統計(排行榜/週報用;存 save-stats-history.json,追加不覆蓋)。 */
+export interface SaveScanTopPal {
+  characterId: string;
+  nickname?: string;
+  level: number | null;
+  /** 星級(rank 0/1=未強化) */
+  rank: number | null;
+  /** 三項個體值加總(0-300) */
+  ivTotal: number;
+  passiveCount: number;
+}
+
+export interface SaveScanPlayerStat {
+  uid: string;
+  name: string;
+  level: number | null;
+  /** 金錢;解析不到為 null */
+  money: number | null;
+  palCount: number;
+  /** 圖鑑捕捉物種數;解析不到為 null */
+  paldeckCount: number | null;
+  /** 最強帕魯(等級→IV 總和→星級排序的第一名);沒帕魯為 null */
+  topPal: SaveScanTopPal | null;
+}
+
+export interface SaveScanGuildStat {
+  id: string;
+  name: string;
+  memberCount: number;
+  baseCount: number;
+  baseCampLevel: number | null;
+}
+
+export interface SaveScanStats {
+  scannedAt: string;
+  levelSavMtime: string;
+  players: SaveScanPlayerStat[];
+  guilds: SaveScanGuildStat[];
 }
 
 export type SaveHealthPhase = "idle" | "download" | "convert" | "analyze";

@@ -12,6 +12,9 @@ import type {
   SavePlayerProfile,
   SavePlayersSnapshot,
   SavePlayersSummary,
+  SaveScanStats,
+  SaveScanPlayerStat,
+  SaveScanTopPal,
 } from "@palserver/shared";
 import { AGENT_VERSION, DATA_DIR, GITHUB_REPO } from "./env.js";
 import type { InstanceRecord } from "./store.js";
@@ -40,6 +43,9 @@ const CONVERT_TIMEOUT_MS = 30 * 60_000;
 
 const REPORTS_FILE = "save-health.json";
 const SNAPSHOTS_FILE = "save-players.json";
+const STATS_HISTORY_FILE = "save-stats-history.json";
+/** 每個世界保留的掃描統計筆數(排行榜週報用;超過丟最舊)。 */
+const STATS_HISTORY_MAX = 60;
 const TMP_DIR = "health-tmp";
 
 function palsavAssetName(): string | null {
@@ -201,6 +207,79 @@ function writeSnapshot(ctx: DriverContext, snapshot: SavePlayersSnapshot): void 
   fs.writeFileSync(snapshotsPath(ctx), JSON.stringify(all));
 }
 
+/* ── 掃描統計歷史(instanceDir/save-stats-history.json,worldGuid → 追加陣列;排行榜/週報用) ── */
+
+function statsHistoryPath(ctx: DriverContext): string {
+  return path.join(ctx.instanceDir, STATS_HISTORY_FILE);
+}
+
+function readStatsHistory(ctx: DriverContext): Record<string, SaveScanStats[]> {
+  try {
+    return JSON.parse(fs.readFileSync(statsHistoryPath(ctx), "utf8")) as Record<string, SaveScanStats[]>;
+  } catch {
+    return {};
+  }
+}
+
+function appendScanStats(ctx: DriverContext, worldGuid: string, stats: SaveScanStats): void {
+  try {
+    const all = readStatsHistory(ctx);
+    const list = all[worldGuid] ?? [];
+    // 同一份存檔(levelSavMtime 沒變)重掃不重複記,直接以最新結果取代最後一筆
+    if (list.length > 0 && list[list.length - 1].levelSavMtime === stats.levelSavMtime) list.pop();
+    list.push(stats);
+    all[worldGuid] = list.slice(-STATS_HISTORY_MAX);
+    fs.writeFileSync(statsHistoryPath(ctx), JSON.stringify(all));
+  } catch {
+    // 統計歷史寫失敗不擋健檢主流程
+  }
+}
+
+export function getStatsHistory(ctx: DriverContext, worldGuid: string): { worldGuid: string; history: SaveScanStats[] } {
+  return { worldGuid, history: readStatsHistory(ctx)[worldGuid] ?? [] };
+}
+
+/** 從完整快照算出精簡統計(每玩家:等級/金錢/圖鑑數/最強帕魯;每公會:成員/據點)。 */
+function computeScanStats(snap: SavePlayersSnapshot): SaveScanStats {
+  const players: SaveScanPlayerStat[] = snap.players.map((p) => {
+    let top: SaveScanTopPal | null = null;
+    let topKey = -1;
+    for (const pal of p.pals) {
+      const iv = (pal.talentHp ?? 0) + (pal.talentShot ?? 0) + (pal.talentDefense ?? 0);
+      // 排序鍵:等級 → IV 總和 → 星級(單一數字比較,等級權重最大)
+      const key = (pal.level ?? 0) * 1_000_000 + iv * 100 + (pal.rank ?? 0);
+      if (key > topKey) {
+        topKey = key;
+        top = {
+          characterId: pal.characterId,
+          ...(pal.nickname ? { nickname: pal.nickname } : {}),
+          level: pal.level,
+          rank: pal.rank,
+          ivTotal: iv,
+          passiveCount: pal.passives.length,
+        };
+      }
+    }
+    return {
+      uid: p.uid,
+      name: p.name,
+      level: p.level,
+      money: p.inventory?.money ?? null,
+      palCount: p.palCount,
+      paldeckCount: p.paldeck ? new Set(p.paldeck).size : null,
+      topPal: top,
+    };
+  });
+  const guilds = (snap.guilds ?? []).map((g) => ({
+    id: g.id,
+    name: g.name,
+    memberCount: g.members.length,
+    baseCount: g.bases.length,
+    baseCampLevel: g.baseCampLevel,
+  }));
+  return { scannedAt: snap.generatedAt, levelSavMtime: snap.levelSavMtime, players, guilds };
+}
+
 /** 玩家快照清單(不含 pals 明細)。 */
 export function getPlayersSummary(ctx: DriverContext, worldGuid: string): SavePlayersSummary & { worldGuid: string } {
   const snap = readSnapshots(ctx)[worldGuid];
@@ -281,6 +360,8 @@ const INVENTORY_FIELDS: Record<string, InventoryKind> = {
 interface ContainerIndex {
   kinds: Map<string, "party" | "palbox">;
   itemOwners: Map<string, { uid: string; kind: InventoryKind }>;
+  /** uid(無連字號小寫)→ 曾捕捉過的物種 characterId 清單(RecordData.PalCaptureCount) */
+  paldeck: Map<string, string[]>;
 }
 
 const savNameToUuid = (name: string): string => {
@@ -290,10 +371,55 @@ const savNameToUuid = (name: string): string => {
 
 type IdProp = { value?: { ID?: { value?: unknown } } };
 
+/** 讀 Map 條目的 key/value(簡單型別為裸值,防禦性也接受 {value} 包裝)。 */
+function mapEntryKey(e: { key?: unknown }): string | null {
+  if (typeof e?.key === "string") return e.key;
+  const wrapped = (e?.key as { value?: unknown })?.value;
+  return typeof wrapped === "string" ? wrapped : null;
+}
+function mapEntryValue(e: { value?: unknown }): unknown {
+  const v = e?.value;
+  if (v !== null && typeof v === "object" && "value" in (v as Record<string, unknown>)) {
+    return (v as { value: unknown }).value;
+  }
+  return v;
+}
+
+/** 從玩家 .sav JSON 撈圖鑑登錄紀錄:SaveData.RecordData.value 底下的
+ *  PaldeckUnlockFlag(bool=已登錄)與 PalCaptureCount(int=捕捉次數)兩張 Map,
+ *  取「已登錄 ∪ 捕捉次數>0」的物種聯集。key 是物種字串,但大小寫/前綴與遊戲
+ *  資料表 characterId 可能有出入(如 Sheepball vs SheepBall),消費端要不分大小寫比對。
+ *  欄位路徑出處:KrisCris/Palworld-Pal-Editor player_entity.py:383-408。 */
+export function extractPaldeck(sd: Record<string, unknown> | undefined): string[] | null {
+  const record = (sd?.RecordData ?? (sd as Record<string, unknown> | undefined)?.recordData) as
+    | { value?: Record<string, { value?: unknown }> }
+    | undefined;
+  if (!record?.value) return null;
+  const species = new Set<string>();
+  const unlockEntries = record.value.PaldeckUnlockFlag?.value;
+  if (Array.isArray(unlockEntries)) {
+    for (const e of unlockEntries as { key?: unknown; value?: unknown }[]) {
+      const k = mapEntryKey(e);
+      if (k && mapEntryValue(e) === true) species.add(k);
+    }
+  }
+  const captureEntries = record.value.PalCaptureCount?.value;
+  if (Array.isArray(captureEntries)) {
+    for (const e of captureEntries as { key?: unknown; value?: unknown }[]) {
+      const k = mapEntryKey(e);
+      const count = mapEntryValue(e);
+      if (k && (typeof count !== "number" || count > 0)) species.add(k);
+    }
+  }
+  if (!Array.isArray(unlockEntries) && !Array.isArray(captureEntries)) return null;
+  return [...species];
+}
+
 async function buildContainerIndex(bin: string, playersDir: string, tmpDir: string): Promise<ContainerIndex> {
   const kinds = new Map<string, "party" | "palbox">();
   const itemOwners = new Map<string, { uid: string; kind: InventoryKind }>();
-  if (!fs.existsSync(playersDir)) return { kinds, itemOwners };
+  const paldeck = new Map<string, string[]>();
+  if (!fs.existsSync(playersDir)) return { kinds, itemOwners, paldeck };
   const files = fs
     .readdirSync(playersDir)
     .filter((f) => /^[0-9A-Fa-f]{32}\.sav$/.test(f))
@@ -323,6 +449,8 @@ async function buildContainerIndex(bin: string, playersDir: string, tmpDir: stri
         const cid = idOf(invInfo?.value?.[field]);
         if (cid) itemOwners.set(normGuid(cid), { uid, kind });
       }
+      const deck = extractPaldeck(sd as Record<string, unknown> | undefined);
+      if (deck) paldeck.set(uid.replace(/-/g, "").toLowerCase(), deck);
     } catch {
       // 個別玩家檔壞掉/格式不符:該玩家的帕魯位置標 unknown、物品缺席,不擋掃描
     } finally {
@@ -330,7 +458,7 @@ async function buildContainerIndex(bin: string, playersDir: string, tmpDir: stri
       fs.rmSync(out, { force: true });
     }
   }
-  return { kinds, itemOwners };
+  return { kinds, itemOwners, paldeck };
 }
 
 async function runJob(rec: InstanceRecord, ctx: DriverContext, worldGuid: string): Promise<SaveHealthReport> {
@@ -371,8 +499,8 @@ async function runJob(rec: InstanceRecord, ctx: DriverContext, worldGuid: string
 
     job.phase = "convert";
     job.pct = null; // 子行程無進度回報
-    // 先解析玩家檔(小,秒級)建容器對照 → 帕魯位置分類 + 離線物品歸屬
-    const { kinds, itemOwners } = await buildContainerIndex(bin, path.join(worldDir, "Players"), tmpDir);
+    // 先解析玩家檔(小,秒級)建容器對照 → 帕魯位置分類 + 離線物品歸屬 + 圖鑑紀錄
+    const { kinds, itemOwners, paldeck } = await buildContainerIndex(bin, path.join(worldDir, "Players"), tmpDir);
     const jsonPath = path.join(tmpDir, "Level.sav.json");
     await runConvert(bin, savCopy, jsonPath);
 
@@ -420,14 +548,22 @@ async function runJob(rec: InstanceRecord, ctx: DriverContext, worldGuid: string
       }
     }
 
+    // 圖鑑紀錄併回玩家檔案(玩家 .sav 的 RecordData;uid 忽略連字號與大小寫比對)
+    for (const p of analysis.players) {
+      p.paldeck = paldeck.get(p.uid.replace(/-/g, "").toLowerCase()) ?? null;
+    }
+
     // 同一次掃描順帶產出玩家/公會快照(玩家詳情與公會頁的資料來源)
-    writeSnapshot(ctx, {
+    const snapshot: SavePlayersSnapshot = {
       worldGuid,
       generatedAt: report.generatedAt,
       levelSavMtime: report.levelSavMtime,
       players: analysis.players,
       guilds: analysis.guilds,
-    });
+    };
+    writeSnapshot(ctx, snapshot);
+    // 排行榜/週報:每次掃描追加一筆精簡統計(不覆蓋,和快照不同)
+    appendScanStats(ctx, worldGuid, computeScanStats(snapshot));
     return report;
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });

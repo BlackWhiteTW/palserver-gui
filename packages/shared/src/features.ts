@@ -21,6 +21,7 @@ export const EARLY_ACCESS_FEATURES: EarlyAccessFeature[] = [
   { id: "log-tools", label: "日誌重點標記與格式化(事件上色 + 易讀套版)" },
   { id: "dashboard-stats", label: "首頁進階顯示(在線玩家 / 資源用量一覽)" },
   { id: "save-slim", label: "存檔健檢(組成分析 / 殘留統計)" },
+  { id: "leaderboard", label: "伺服器排行榜(等級 / 財富 / 圖鑑 / 最強帕魯 + 掃描差異週報)" },
 ];
 
 /** 這個功能是否對所有人免費 —— 只有「不在目錄裡」的功能免費;目錄內為贊助者專屬,無期限。 */

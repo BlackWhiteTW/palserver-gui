@@ -69,6 +69,7 @@ import {
   getHealthStatus,
   getPlayerProfile,
   getPlayersSummary,
+  getStatsHistory,
   startHealthCheck,
 } from "./save-tools.js";
 import { applyHostFix, transferPalOwners } from "./host-save-fix.js";
@@ -1609,6 +1610,17 @@ export function registerRoutes(
       return { worldGuid, profile };
     }
     return getPlayersSummary(ctxOf(rec), worldGuid);
+  });
+
+  // ── 掃描統計歷史(每次健檢追加一筆;排行榜/週報分頁讀這裡)──
+  app.get("/api/instances/:id/saves/stats-history", async (req) => {
+    const rec = getOr404((req.params as { id: string }).id);
+    const q = z
+      .object({ worldGuid: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, "世界 GUID 格式不合法").optional() })
+      .parse(req.query);
+    const worldGuid = q.worldGuid ?? (await saves.activeWorldGuidAsync(rec, ctxOf(rec)));
+    if (!worldGuid) throw Object.assign(new Error("找不到啟用中的世界"), { statusCode: 404 });
+    return getStatsHistory(ctxOf(rec), worldGuid);
   });
 
   // ── 公會快照(存檔掃描產出;公會分頁讀這裡)──

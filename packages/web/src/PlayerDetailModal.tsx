@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FiX, FiCpu, FiHome, FiLock, FiMapPin, FiPackage, FiRefreshCw, FiTrendingUp, FiUser, FiZap, FiShield } from "react-icons/fi";
+import { FiX, FiBookOpen, FiCpu, FiHome, FiLock, FiMapPin, FiPackage, FiRefreshCw, FiTrendingUp, FiUser, FiZap, FiShield } from "react-icons/fi";
 import { GiShield } from "react-icons/gi";
 import {
   hasFeature,
@@ -345,6 +345,8 @@ function MergedBody({
 
       {/* 進度(經驗值/科技點/擊敗頭目…)與已解鎖科技:贊助內容,收在詳細開關內 */}
       {deep && prog && <Progression prog={prog} />}
+      {/* 圖鑑收集完成度:玩家存檔 RecordData 的登錄/捕捉紀錄 vs 內建物種目錄 */}
+      {deep && profile?.paldeck && <PaldeckPanel paldeck={profile.paldeck} gameData={gameData} />}
       {deep && detail?.available && detail.techs && (
         <div>
           <h3 className="mb-1 inline-flex items-center gap-1.5 text-sm font-extrabold text-ink-muted">
@@ -505,6 +507,35 @@ function StatusPointsPanel({ points, unused }: { points: { name: string; points:
             <p className="font-mono font-extrabold">+{p.points}</p>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/** 圖鑑收集完成度:paldeck 是存檔登錄/捕捉過的物種 key(大小寫可能與目錄不一致,
+ *  用 palByIdLower 不分大小寫對回目錄);分母是內建物種目錄總數。 */
+function PaldeckPanel({ paldeck, gameData }: { paldeck: string[]; gameData: GameData | null }) {
+  if (!gameData || gameData.pals.length === 0) return null;
+  const total = gameData.pals.length;
+  const owned = new Set<string>();
+  for (const key of paldeck) {
+    const hit = gameData.palByIdLower.get(key.toLowerCase());
+    if (hit) owned.add(hit.id);
+  }
+  const pct = Math.min(100, Math.round((owned.size / total) * 100));
+  return (
+    <div>
+      <h3 className="mb-2 inline-flex items-center gap-1.5 text-sm font-extrabold text-ink-muted">
+        <FiBookOpen className="size-4 text-pal" /> {t("圖鑑收集")}
+      </h3>
+      <div className="rounded-cute bg-card-soft/60 p-3">
+        <div className="flex items-baseline justify-between text-sm">
+          <p className="font-extrabold">{t("{n} / {total} 種", { n: owned.size, total })}</p>
+          <p className="text-xs font-bold text-ink-muted">{pct}%</p>
+        </div>
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-card">
+          <div className="h-full rounded-full bg-pal transition-all" style={{ width: `${Math.max(pct, 1)}%` }} />
+        </div>
       </div>
     </div>
   );

@@ -47,6 +47,7 @@ import type {
   SaveHealthStatus,
   SavePlayerProfile,
   SavePlayersSummary,
+  SaveScanStats,
   SavesStatus,
   VersionStatus,
   WorldSettings,
@@ -660,6 +661,12 @@ export class AgentClient {
   }> {
     const q = worldGuid ? `?worldGuid=${encodeURIComponent(worldGuid)}` : "";
     return this.request(`/api/instances/${id}/saves/guilds-snapshot${q}`);
+  }
+
+  /** 掃描統計歷史(排行榜/週報;每次健檢追加一筆)。 */
+  statsHistory(id: string, worldGuid?: string): Promise<{ worldGuid: string; history: SaveScanStats[] }> {
+    const q = worldGuid ? `?worldGuid=${encodeURIComponent(worldGuid)}` : "";
+    return this.request(`/api/instances/${id}/saves/stats-history${q}`);
   }
 
   saveHealth(id: string, worldGuid: string): Promise<SaveHealthStatus> {
