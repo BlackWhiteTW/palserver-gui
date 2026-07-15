@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
-import { FiChevronDown, FiChevronUp, FiHome, FiLock, FiMapPin, FiPackage, FiRefreshCw, FiUsers, FiZap } from "react-icons/fi";
-import { GiBookshelf } from "react-icons/gi";
-import { hasFeature, savToMap, type SaveGuild } from "@palserver/shared";
+import { FiChevronRight, FiHome, FiLock, FiRefreshCw } from "react-icons/fi";
+import { hasFeature, type SaveGuild } from "@palserver/shared";
 import type { AgentClient } from "./api";
-import { useGameData, displayName, findCharacter, itemIconUrl, type GameData } from "./gameData";
+import { GuildDetailModal, researchName } from "./GuildDetailModal";
+import { useGameData } from "./gameData";
 import { t, useI18n } from "./i18n";
 import { btnGhost, card, errorCls } from "./ui";
 
 /**
- * 公會分頁 — 存檔快照(save-tools 掃描)驅動的公會總覽:
- * 成員(含離線與最後上線)、據點(可跳地圖)、據點駐守帕魯、公會倉庫、研究進度。
- * 不依賴 PalDefender;資料是「上次掃描時」的狀態,按「從存檔刷新」重掃。
- * 贊助者功能(save-slim)。
+ * 公會分頁 — 存檔快照(save-tools 掃描)驅動的公會總覽。
+ * 清單卡片只放基礎資訊,點擊開 GuildDetailModal 看完整資料
+ * (成員/據點駐守帕魯/公會倉庫/研究)— 與玩家詳情同一套 UX。
+ * 不依賴 PalDefender;贊助者功能(save-slim)。
  */
 export function GuildsTab({
   client,
@@ -33,6 +33,7 @@ export function GuildsTab({
   const [canScan, setCanScan] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [detailFor, setDetailFor] = useState<SaveGuild | null>(null);
 
   useEffect(() => {
     client
@@ -136,191 +137,48 @@ export function GuildsTab({
       )}
 
       {sorted.map((g) => (
-        <GuildCard key={g.id} guild={g} gameData={gameData} onShowOnMap={onShowOnMap} />
-      ))}
-    </div>
-  );
-}
-
-function GuildCard({
-  guild,
-  gameData,
-  onShowOnMap,
-}: {
-  guild: SaveGuild;
-  gameData: GameData | null;
-  onShowOnMap?: (x: number, y: number) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const adminNorm = (guild.adminUid ?? "").replace(/[^0-9a-f]/gi, "").toLowerCase();
-  const storageKinds = guild.storage?.length ?? 0;
-
-  return (
-    <div className={card}>
-      <button className="flex w-full flex-wrap items-center justify-between gap-3 text-left" onClick={() => setOpen((v) => !v)}>
-        <div className="min-w-0">
-          <p className="flex items-center gap-2 text-sm font-extrabold">
-            <FiHome className="size-4 shrink-0 text-pal" />
-            <span className="truncate">{guild.name}</span>
-            {guild.baseCampLevel !== null && (
-              <span className="rounded-full bg-card-soft px-2 py-0.5 text-xs font-bold text-ink-muted">
-                {t("據點等級 Lv.{n}", { n: guild.baseCampLevel })}
-              </span>
-            )}
-          </p>
-          <p className="mt-1 text-[13px] text-ink-muted">
-            {t("{n} 名成員", { n: guild.members.length })} · {t("{n} 個據點", { n: guild.bases.length })}
-            {guild.storage !== null && <> · {t("倉庫 {n} 種物品", { n: storageKinds })}</>}
-            {guild.research && guild.research.currentId && (
-              <> · {t("研究中:{id}", { id: prettifyResearchId(guild.research.currentId) })}</>
-            )}
-          </p>
-        </div>
-        {open ? <FiChevronUp className="size-4 shrink-0 text-ink-muted" /> : <FiChevronDown className="size-4 shrink-0 text-ink-muted" />}
-      </button>
-
-      {open && (
-        <div className="mt-3 flex flex-col gap-4 border-t-2 border-line pt-3">
-          {/* 成員 */}
-          <div>
-            <h4 className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-ink-muted">
-              <FiUsers className="size-4 text-pal" /> {t("成員")}
-              <span className="rounded-full bg-card-soft px-2 py-0.5 text-xs font-bold">{guild.members.length}</span>
-            </h4>
-            <div className="flex flex-col divide-y divide-line rounded-cute border-2 border-line">
-              {guild.members.map((m) => {
-                const isAdmin = m.uid.replace(/[^0-9a-f]/gi, "").toLowerCase() === adminNorm;
-                return (
-                  <div key={m.uid} className="flex flex-wrap items-center gap-x-3 px-3 py-1.5 text-[13px]">
-                    <span className="min-w-28 font-bold">{m.name}</span>
-                    {isAdmin && (
-                      <span className="rounded-full bg-sun/15 px-2 py-0.5 text-xs font-bold text-sun">{t("會長")}</span>
-                    )}
-                    <span className="ml-auto text-xs text-ink-muted">
-                      {m.lastOnlineDaysAgo === null
-                        ? ""
-                        : m.lastOnlineDaysAgo === 0
-                          ? t("今天上線")
-                          : t("{n} 天前上線", { n: m.lastOnlineDaysAgo })}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 據點 + 駐守帕魯 */}
-          {guild.bases.length > 0 && (
-            <div>
-              <h4 className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-ink-muted">
-                <FiMapPin className="size-4 text-pal" /> {t("據點")}
-                <span className="rounded-full bg-card-soft px-2 py-0.5 text-xs font-bold">{guild.bases.length}</span>
-              </h4>
-              <div className="flex flex-col gap-2">
-                {guild.bases.map((b, i) => {
-                  const m = savToMap(b.x, b.y);
-                  return (
-                    <div key={b.id} className="rounded-cute border-2 border-line p-2.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[13px] font-bold">{b.name || t("據點 {n}", { n: i + 1 })}</span>
-                        <span className="font-mono text-xs text-ink-muted">
-                          ({Math.round(m.x)}, {Math.round(m.y)})
-                        </span>
-                        {onShowOnMap && (
-                          <button
-                            className="inline-flex items-center gap-1 rounded-full border-2 border-line px-2 py-0.5 text-xs font-bold text-ink-muted transition hover:border-pal hover:text-pal"
-                            onClick={() => onShowOnMap(m.x, m.y)}
-                          >
-                            <FiMapPin className="size-3" /> {t("在地圖上查看")}
-                          </button>
-                        )}
-                        <span className="ml-auto inline-flex items-center gap-1 text-xs text-ink-muted">
-                          <FiZap className="size-3.5" /> {t("{n} 隻工作帕魯", { n: b.workers.length })}
-                        </span>
-                      </div>
-                      {b.workers.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {b.workers.map((w, j) => {
-                            const hit = findCharacter(gameData, w.characterId);
-                            return (
-                              <span
-                                key={`${w.characterId}-${j}`}
-                                className="inline-flex items-center gap-1 rounded-full bg-card-soft px-2 py-0.5 text-xs font-bold"
-                                title={w.characterId}
-                              >
-                                {hit?.iconUrl && <img src={hit.iconUrl} alt="" className="size-4" />}
-                                {hit ? displayName(hit.entity) : w.characterId}
-                                {w.level !== null && <span className="font-mono font-normal text-ink-muted">Lv.{w.level}</span>}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* 公會倉庫 */}
-          {guild.storage !== null && guild.storage.length > 0 && (
-            <div>
-              <h4 className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-ink-muted">
-                <FiPackage className="size-4 text-pal" /> {t("公會倉庫")}
-                <span className="rounded-full bg-card-soft px-2 py-0.5 text-xs font-bold">{guild.storage.length}</span>
-              </h4>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
-                {guild.storage.map(({ itemId, count }, i) => {
-                  const entity = gameData?.itemById.get(itemId);
-                  return (
-                    <div key={`${itemId}-${i}`} className="flex items-center gap-2 rounded-xl border-2 border-line p-2">
-                      {entity?.icon ? (
-                        <img src={itemIconUrl(entity.icon)} alt="" className="size-8 shrink-0" />
-                      ) : (
-                        <span className="size-8 shrink-0 rounded bg-card-soft" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13px] font-bold">{entity ? displayName(entity) : itemId}</p>
-                      </div>
-                      <span className="shrink-0 text-sm font-extrabold text-pal">×{count}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* 研究 */}
-          {guild.research && guild.research.entries.length > 0 && (
-            <div>
-              <h4 className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-ink-muted">
-                <GiBookshelf className="size-4 text-pal" /> {t("公會研究")}
-                <span className="rounded-full bg-card-soft px-2 py-0.5 text-xs font-bold">
-                  {guild.research.entries.length}
+        <button
+          key={g.id}
+          className={`${card} flex w-full flex-wrap items-center justify-between gap-3 text-left transition hover:border-pal/50`}
+          onClick={() => setDetailFor(g)}
+        >
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-sm font-extrabold">
+              <FiHome className="size-4 shrink-0 text-pal" />
+              <span className="truncate">{g.name}</span>
+              {g.baseCampLevel !== null && (
+                <span className="rounded-full bg-card-soft px-2 py-0.5 text-xs font-bold text-ink-muted">
+                  {t("據點等級 Lv.{n}", { n: g.baseCampLevel })}
                 </span>
-                {guild.research.currentId && (
-                  <span className="rounded-full bg-grass/10 px-2 py-0.5 text-xs font-bold text-grass">
-                    {t("研究中:{id}", { id: prettifyResearchId(guild.research.currentId) })}
-                  </span>
-                )}
-              </h4>
-              <div className="flex flex-wrap gap-1.5">
-                {guild.research.entries.map((r) => (
-                  <span key={r.id} className="rounded-full bg-card-soft px-2 py-0.5 text-xs font-bold text-ink-muted" title={r.id}>
-                    {prettifyResearchId(r.id)}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+              )}
+            </p>
+            <p className="mt-1 text-[13px] text-ink-muted">
+              {t("{n} 名成員", { n: g.members.length })} · {t("{n} 個據點", { n: g.bases.length })}
+              {g.storage !== null && <> · {t("倉庫 {n} 種物品", { n: g.storage.length })}</>}
+              {g.research?.currentId && (
+                <> · {t("研究中:{id}", { id: researchName(gameData, g.research.currentId) })}</>
+              )}
+            </p>
+          </div>
+          <FiChevronRight className="size-4 shrink-0 text-ink-muted" />
+        </button>
+      ))}
+
+      {detailFor && (
+        <GuildDetailModal
+          guild={detailFor}
+          generatedAt={generatedAt}
+          onShowOnMap={
+            onShowOnMap
+              ? (x, y) => {
+                  setDetailFor(null);
+                  onShowOnMap(x, y);
+                }
+              : undefined
+          }
+          onClose={() => setDetailFor(null)}
+        />
       )}
     </div>
   );
-}
-
-/** 研究 id 沒有現成的名稱對照表,先做可讀化(去前綴、底線轉空格)。 */
-function prettifyResearchId(id: string): string {
-  return id.replace(/^Research_/i, "").replace(/_/g, " ");
 }

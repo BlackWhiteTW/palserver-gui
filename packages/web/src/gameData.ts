@@ -43,6 +43,8 @@ export interface GameData {
   activeSkills: GameEntity[];
   /** 人類 NPC 目錄(用帕魯球抓到的獵人/入侵者等,存檔的 CharacterID 也會指到這裡) */
   humans: GameEntity[];
+  /** 公會研究目錄(Lab Research;id 為存檔 research_id) */
+  research: GameEntity[];
   palById: Map<string, GameEntity>;
   itemById: Map<string, GameEntity>;
   passiveById: Map<string, GameEntity>;
@@ -51,6 +53,8 @@ export interface GameData {
    *  (實例:存檔 "Sheepball" vs 圖鑑 "SheepBall"),寬鬆查找用。 */
   palByIdLower: Map<string, GameEntity>;
   humanByIdLower: Map<string, GameEntity>;
+  /** 研究 id → entity(含小寫鍵,查找寬鬆) */
+  researchById: Map<string, GameEntity>;
 }
 
 export interface CharacterHit {
@@ -82,9 +86,9 @@ let cache: GameData | null = null;
 let inflight: Promise<GameData> | null = null;
 const listeners = new Set<(d: GameData) => void>();
 
-type Catalogs = [GameEntity[], GameEntity[], GameEntity[], GameEntity[], GameEntity[]];
+type Catalogs = [GameEntity[], GameEntity[], GameEntity[], GameEntity[], GameEntity[], GameEntity[]];
 
-function build([pals, items, passives, activeSkills, humans]: Catalogs): GameData {
+function build([pals, items, passives, activeSkills, humans, research]: Catalogs): GameData {
   return {
     pals,
     items,
@@ -92,12 +96,14 @@ function build([pals, items, passives, activeSkills, humans]: Catalogs): GameDat
     passives,
     activeSkills,
     humans,
+    research,
     palById: new Map(pals.map((p) => [p.id, p])),
     itemById: new Map(items.map((i) => [i.id, i])),
     passiveById: new Map(passives.map((p) => [p.id, p])),
     skillById: new Map(activeSkills.map((s) => [s.id, s])),
     palByIdLower: new Map(pals.map((p) => [p.id.toLowerCase(), p])),
     humanByIdLower: new Map(humans.map((h) => [h.id.toLowerCase(), h])),
+    researchById: new Map(research.flatMap((r) => [[r.id, r], [r.id.toLowerCase(), r]])),
   };
 }
 
@@ -109,8 +115,9 @@ async function fetchCatalogs(base: string, opts?: RequestInit): Promise<Catalogs
     one("items.json"),
     one("passives.json"),
     one("activeSkills.json"),
-    // humans.json 較晚加入:遠端(GitHub raw)或舊快取拿不到時退空陣列,不擋整包
+    // humans/research 較晚加入:遠端(GitHub raw)或舊快取拿不到時退空陣列,不擋整包
     one("humans.json").catch(() => [] as GameEntity[]),
+    one("research.json").catch(() => [] as GameEntity[]),
   ]);
 }
 

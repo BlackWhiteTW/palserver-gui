@@ -412,7 +412,8 @@ async function runJob(rec: InstanceRecord, ctx: DriverContext, worldGuid: string
         });
         for (const g of analysis.guilds) {
           const cid = analysis.guildStorageContainers.get(normGuid(g.id));
-          if (cid) g.storage = contents.get(normGuid(cid)) ?? [];
+          // 找不到容器 = 解析不到(null,UI 顯示無資料);找到但沒東西 = 真的空([])
+          if (cid) g.storage = contents.get(normGuid(cid)) ?? null;
         }
       } catch {
         // 倉庫收集失敗不擋整體:guilds.storage 維持 null(UI 顯示無資料)

@@ -10,10 +10,12 @@ import {
   type PdGuild,
   type PdGuildDetail,
   type PdPlayerSummary,
+  type SaveGuild,
 } from "@palserver/shared";
 import type { AgentClient } from "./api";
 import { useGameData, palIconUrl, type GameData } from "./gameData";
 import { PlayerDetailModal } from "./PlayerDetailModal";
+import { GuildDetailModal as SaveGuildDetailModal } from "./GuildDetailModal";
 import { t, useI18n } from "./i18n";
 import { Overlay, btn, btnGhost, card, errorCls } from "./ui";
 
@@ -129,6 +131,29 @@ export function MapTab({
   const [guildsUnlocked, setGuildsUnlocked] = useState(false);
   const [guildDetailId, setGuildDetailId] = useState<string | null>(null);
   const [playerDetail, setPlayerDetail] = useState<{ id: string; label: string } | null>(null);
+  // 地圖彈窗只放基礎資訊,「查看完整資料」才開重量級詳情(玩家/公會一致)
+  const [playerPeek, setPlayerPeek] = useState<{ id: string; label: string } | null>(null);
+  const [guildFull, setGuildFull] = useState<SaveGuild | null>(null);
+  const [saveSnap, setSaveSnap] = useState<{ generatedAt: string | null; guilds: SaveGuild[] } | null>(null);
+
+  /** 懶載入公會快照(第一次點「查看完整資料」時才抓)。 */
+  const openGuildFull = async (guildId: string, name: string) => {
+    try {
+      const snap = saveSnap ?? (await client.guildsSnapshot(instanceId));
+      setSaveSnap(snap);
+      const norm = (s: string) => s.replace(/[^0-9a-f]/gi, "").toLowerCase();
+      const g =
+        snap.guilds.find((x) => norm(x.id) === norm(guildId)) ?? snap.guilds.find((x) => x.name === name);
+      if (!g) {
+        setError(t("存檔快照裡找不到這個公會 — 到公會分頁「從存檔刷新」重掃一次。"));
+        return;
+      }
+      setGuildDetailId(null);
+      setGuildFull(g);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(fullscreen);
   const [showPlayers, setShowPlayers] = useState(true);
@@ -352,7 +377,7 @@ export function MapTab({
           showOres={showOres}
           gameData={gameData}
           onGuildClick={setGuildDetailId}
-          onPlayerClick={(id, label) => setPlayerDetail({ id, label })}
+          onPlayerClick={(id, label) => setPlayerPeek({ id, label })}
         />
       </div>
     </div>
@@ -372,7 +397,36 @@ export function MapTab({
             setGuildDetailId(null);
             setFocus({ ...pt, n: Date.now() });
           }}
+          onOpenDetail={(name) => void openGuildFull(guildDetailId, name)}
           onClose={() => setGuildDetailId(null)}
+        />
+      )}
+      {guildFull && (
+        <SaveGuildDetailModal
+          guild={guildFull}
+          generatedAt={saveSnap?.generatedAt ?? null}
+          onShowOnMap={(x, y) => {
+            setGuildFull(null);
+            setFocus({ x, y, n: Date.now() });
+          }}
+          onClose={() => setGuildFull(null)}
+        />
+      )}
+      {playerPeek && (
+        <PlayerPeekModal
+          peek={playerPeek}
+          live={live}
+          pdPlayers={pdPlayers}
+          gameData={gameData}
+          onLocate={(pt) => {
+            setPlayerPeek(null);
+            setFocus({ ...pt, n: Date.now() });
+          }}
+          onOpenDetail={() => {
+            setPlayerDetail(playerPeek);
+            setPlayerPeek(null);
+          }}
+          onClose={() => setPlayerPeek(null)}
         />
       )}
       {playerDetail && (
@@ -433,6 +487,73 @@ export function MapTab({
  * 成員顯示與地圖/玩家列表同款的帕魯頭像(seed=userId,靠 pdPlayers 名冊把
  * playerUid 對回 userId;對不上才退用 playerUid)。在線成員可點:回報地圖
  * 座標給父層跳轉(位置優先取遊戲 REST 即時座標,退而求其次用名冊的最後存檔位置)。 */
+/** 地圖上的玩家小卡:基礎資訊(在線/等級/座標)+「查看完整資料」才開重量級詳情。 */
+function PlayerPeekModal({
+  peek,
+  live,
+  pdPlayers,
+  gameData,
+  onLocate,
+  onOpenDetail,
+  onClose,
+}: {
+  peek: { id: string; label: string };
+  live: LiveStatus | null;
+  pdPlayers: PdPlayerSummary[];
+  gameData: GameData | null;
+  onLocate: (pt: { x: number; y: number }) => void;
+  onOpenDetail: () => void;
+  onClose: () => void;
+}) {
+  useI18n();
+  const rp = live?.available
+    ? live.players.find((p) => p.userId === peek.id || p.playerId === peek.id || p.name === peek.label)
+    : undefined;
+  const pp = pdPlayers.find((p) => p.userId === peek.id || p.playerUid === peek.id || p.name === peek.label);
+  const iconUrl = avatarIconUrl(peek.id, gameData);
+  const pos = rp
+    ? savToMap(rp.location_x, rp.location_y)
+    : pp?.worldX != null && pp?.worldY != null
+      ? savToMap(pp.worldX, pp.worldY)
+      : null;
+  const online = !!rp || !!pp?.online;
+
+  return (
+    <Overlay onClose={onClose}>
+      <div className={`${card} flex w-96 max-w-full flex-col gap-3`} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="inline-flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-line bg-card-soft">
+              {iconUrl ? <img src={iconUrl} alt="" className="size-full object-cover" /> : null}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[15px] font-extrabold">{peek.label}</p>
+              <p className="text-xs text-ink-muted">
+                <span className={`font-bold ${online ? "text-grass" : ""}`}>{online ? t("在線") : t("離線")}</span>
+                {rp && <> · Lv.{rp.level} · {rp.ping.toFixed(0)}ms</>}
+                {pp?.guildName && <> · {pp.guildName}</>}
+              </p>
+            </div>
+          </div>
+          <button className="text-ink-muted transition hover:text-ink" onClick={onClose} aria-label={t("關閉")}>
+            <FiX className="size-5" />
+          </button>
+        </div>
+        <div className="flex gap-2">
+          {pos && (
+            <button className={`${btnGhost} inline-flex items-center gap-1.5`} onClick={() => onLocate(pos)}>
+              <FiMapPin className="size-3.5" /> {t("跳到位置")}
+            </button>
+          )}
+          <button className={`${btn} inline-flex flex-1 items-center justify-center gap-1.5`} onClick={onOpenDetail}>
+            <FiUsers className="size-3.5" /> {t("查看完整資料")}
+          </button>
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
 function GuildDetailModal({
   client,
   instanceId,
@@ -441,6 +562,7 @@ function GuildDetailModal({
   pdPlayers,
   livePlayers,
   onLocate,
+  onOpenDetail,
   onClose,
 }: {
   client: AgentClient;
@@ -450,6 +572,8 @@ function GuildDetailModal({
   pdPlayers: PdPlayerSummary[];
   livePlayers: RestPlayer[];
   onLocate: (pt: { x: number; y: number }) => void;
+  /** 開「完整公會資料」(存檔快照彈窗);參數為公會名(id 對不到時備援比對用) */
+  onOpenDetail?: (name: string) => void;
   onClose: () => void;
 }) {
   useI18n();
@@ -473,9 +597,20 @@ function GuildDetailModal({
           <h2 className="inline-flex items-center gap-2 truncate text-lg font-extrabold">
             <FiHome className="size-5 text-pal" /> {detail?.name || t("公會詳情")}
           </h2>
-          <button className={btnGhost} onClick={onClose}>
-            <FiX className="inline size-4" /> {t("關閉")}
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenDetail && detail?.available && (
+              <button
+                className={`${btnGhost} inline-flex items-center gap-1.5`}
+                onClick={() => onOpenDetail(detail.name)}
+                title={t("倉庫、駐守帕魯與研究進度(來自存檔快照)")}
+              >
+                {t("查看完整資料")}
+              </button>
+            )}
+            <button className={btnGhost} onClick={onClose}>
+              <FiX className="inline size-4" /> {t("關閉")}
+            </button>
+          </div>
         </div>
 
         {error && <p className={errorCls}>{error}</p>}
