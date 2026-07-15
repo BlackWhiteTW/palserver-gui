@@ -204,27 +204,49 @@ async function requestGracefulShutdown(rec: InstanceRecord): Promise<boolean> {
   }
 }
 
+/** DepotDownloader 工具快取目錄(重置損毀工具時也要用同一個路徑)。 */
+const depotDownloaderDir = () => path.join(DATA_DIR, "tools", `depotdownloader-${DEPOTDOWNLOADER_VERSION}`);
+
 /** Download DepotDownloader (64-bit, works everywhere SteamCMD's 32-bit
- * bootstrap doesn't) into the agent's tools dir once. */
+ * bootstrap doesn't) into the agent's tools dir once.
+ * 先落到暫存目錄、驗證 exe 存在且大小合理,再整目錄換名上位 —— 半套下載/解壓
+ * (斷線、磁碟滿、防毒攔截)不會留下「看似存在其實損毀」的快取,那會讓之後
+ * 每一次安裝/更新都敗在同一顆壞 exe 上(症狀:exit 0xE0434352)。 */
 async function ensureDepotDownloader(): Promise<string> {
   const platform = IS_WIN ? "windows" : process.platform === "darwin" ? "macos" : "linux";
-  const toolsDir = path.join(DATA_DIR, "tools", `depotdownloader-${DEPOTDOWNLOADER_VERSION}`);
-  const bin = path.join(toolsDir, IS_WIN ? "DepotDownloader.exe" : "DepotDownloader");
+  const toolsDir = depotDownloaderDir();
+  const binName = IS_WIN ? "DepotDownloader.exe" : "DepotDownloader";
+  const bin = path.join(toolsDir, binName);
   if (fs.existsSync(bin)) return bin;
 
-  fs.mkdirSync(toolsDir, { recursive: true });
+  const tmpDir = `${toolsDir}.part`;
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+  fs.mkdirSync(tmpDir, { recursive: true });
   const url =
     `https://github.com/SteamRE/DepotDownloader/releases/download/` +
     `DepotDownloader_${DEPOTDOWNLOADER_VERSION}/DepotDownloader-${platform}-x64.zip`;
-  const zipPath = path.join(toolsDir, "dd.zip");
+  const zipPath = path.join(tmpDir, "dd.zip");
   const res = await fetch(url);
   if (!res.ok) throw new Error(`failed to download DepotDownloader: HTTP ${res.status}`);
-  fs.writeFileSync(zipPath, Buffer.from(await res.arrayBuffer()));
+  const buf = Buffer.from(await res.arrayBuffer());
+  const expected = Number(res.headers.get("content-length") ?? 0);
+  if (expected > 0 && buf.byteLength !== expected) {
+    throw new Error(`DepotDownloader 下載不完整(${buf.byteLength}/${expected} bytes),請再試一次`);
+  }
+  fs.writeFileSync(zipPath, buf);
   // Plain `tar` can't extract zip on most Linux distros (GNU tar has no zip
   // support; only bsdtar on Windows 10+/macOS does), so use a JS zip reader.
-  await extractZip(zipPath, { dir: toolsDir });
+  await extractZip(zipPath, { dir: tmpDir });
   fs.rmSync(zipPath);
-  if (!IS_WIN) fs.chmodSync(bin, 0o755);
+  const tmpBin = path.join(tmpDir, binName);
+  const st = fs.statSync(tmpBin, { throwIfNoEntry: false });
+  // self-contained .NET 單檔至少數十 MB;過小代表解壓不完整
+  if (!st || st.size < 5_000_000) {
+    throw new Error("DepotDownloader 解壓後不完整,請再試一次");
+  }
+  if (!IS_WIN) fs.chmodSync(tmpBin, 0o755);
+  fs.rmSync(toolsDir, { recursive: true, force: true });
+  fs.renameSync(tmpDir, toolsDir);
   return bin;
 }
 
@@ -250,8 +272,7 @@ async function ensureInstalled(
   if (fs.existsSync(path.join(root, SERVER_LAUNCHER))) return;
 
   onLine(`[palserver] installing Palworld dedicated server into ${root} ...`);
-  const dd = await ensureDepotDownloader();
-  await runDepotDownloader(dd, root, onLine, onProgress);
+  await runDepotDownloaderWithRecovery(root, onLine, onProgress);
 }
 
 /** DepotDownloader / OS 在磁碟寫滿時吐的字樣(跨平台、含 .NET IOException)。 */
@@ -277,12 +298,14 @@ function runDepotDownloader(
   const osFlag = IS_WIN ? "windows" : "linux";
   return new Promise<void>((resolve, reject) => {
     let sawDiskFull = false;
+    let outputLines = 0;
     const handle = (b: Buffer) =>
       b
         .toString()
         .split("\n")
         .filter(Boolean)
         .forEach((line) => {
+          outputLines += 1;
           if (DISK_FULL_RE.test(line)) sawDiskFull = true;
           const m = DD_PROGRESS_RE.exec(line);
           if (m && onProgress) {
@@ -301,10 +324,46 @@ function runDepotDownloader(
     child.on("error", reject);
     child.on("exit", (code) => {
       if (code === 0) return resolve();
-      // 非零離開 + 看到磁碟不足字樣 = 幾乎確定是空間問題,給前端可翻譯的 code。
-      reject(sawDiskFull ? diskFullError() : new Error(`DepotDownloader exited with code ${code}`));
+      if (sawDiskFull) return reject(diskFullError());
+      // 幾乎沒有輸出就非零退場 = 下載器本身掛了(工具檔損毀/被防毒攔截/
+      // .NET 例外如 0xE0434352),不是 Steam 下載問題 —— 標記給呼叫端重置工具重試。
+      const hex = code !== null && code >= 0 ? ` (0x${code.toString(16).toUpperCase()})` : "";
+      reject(
+        Object.assign(new Error(`DepotDownloader exited with code ${code}${hex}`), {
+          ddEarlyCrash: outputLines < 5,
+        }),
+      );
     });
   });
+}
+
+/** 跑 DepotDownloader,「啟動即崩潰」時自動重置工具快取、重新下載後再試一次。
+ *  損毀的快取工具會讓每一次安裝/更新都敗在同一顆壞 exe(社群回報:
+ *  exit 3762504530 = 0xE0434352 .NET 例外),自我修復比叫使用者刪資料夾實際。 */
+async function runDepotDownloaderWithRecovery(
+  root: string,
+  onLine: (line: string) => void,
+  onProgress?: (percent: number) => void,
+): Promise<void> {
+  const dd = await ensureDepotDownloader();
+  try {
+    await runDepotDownloader(dd, root, onLine, onProgress);
+  } catch (err) {
+    if (!(err as { ddEarlyCrash?: boolean }).ddEarlyCrash) throw err;
+    onLine("[palserver] 下載器啟動即異常(工具檔可能損毀),正在重新下載 DepotDownloader 後重試…");
+    fs.rmSync(depotDownloaderDir(), { recursive: true, force: true });
+    const freshDd = await ensureDepotDownloader();
+    try {
+      await runDepotDownloader(freshDd, root, onLine, onProgress);
+    } catch (err2) {
+      if ((err2 as { ddEarlyCrash?: boolean }).ddEarlyCrash) {
+        throw new Error(
+          `${(err2 as Error).message} — 下載器重新下載後仍異常,可能被防毒軟體攔截:請把 agent 資料夾加入防毒白名單後再試`,
+        );
+      }
+      throw err2;
+    }
+  }
 }
 
 const worldIniPath = (rec: InstanceRecord, ctx: DriverContext) =>
@@ -487,8 +546,7 @@ export function updateServer(rec: InstanceRecord, ctx: DriverContext, fresh = fa
       fs.mkdirSync(ctx.instanceDir, { recursive: true });
       appendLog(fresh ? "[palserver] 開始重灌伺服器(刪除本體後重新下載)…" : "[palserver] 開始更新伺服器…");
       if (fresh) wipeGameFiles(serverRoot(rec, ctx), appendLog);
-      const dd = await ensureDepotDownloader();
-      await runDepotDownloader(dd, serverRoot(rec, ctx), appendLog, (pct) =>
+      await runDepotDownloaderWithRecovery(serverRoot(rec, ctx), appendLog, (pct) =>
         installProgress.set(rec.id, pct),
       );
       appendLog("[palserver] 更新完成");
