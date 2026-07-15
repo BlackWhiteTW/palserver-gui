@@ -84,17 +84,6 @@ export function VersionCard({
             <p className="text-[13px] font-bold text-sun">
               {t("有新版本可更新。更新前建議先到「存檔備份」建立一份備份。")}
             </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <button
-                className={`${btn} inline-flex items-center gap-1.5`}
-                onClick={() => void update()}
-                disabled={busy || running}
-                title={running ? t("請先停止伺服器") : undefined}
-              >
-                <FiDownload className="size-4" /> {busy ? t("啟動更新中…") : t("立即更新")}
-              </button>
-              {running && <span className="text-xs text-ink-muted">{t("請先停止伺服器")}</span>}
-            </div>
           </div>
         ) : version.updateAvailable === false ? (
           <p className="inline-flex items-center gap-1.5 rounded-full border-[1.5px] border-grass/40 bg-grass/15 px-3 py-1 text-xs font-bold text-grass">
@@ -107,7 +96,23 @@ export function VersionCard({
         )}
       </div>
 
+      {/* 更新按鈕常駐:版本偵測失敗(連不上 Steam 等)的使用者也要能手動更新;
+          更新本身內含檔案驗證,已是最新時重跑等於 verify+repair,無害 */}
       <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          className={`${version.updateAvailable === true ? btn : btnGhost} inline-flex items-center gap-1.5`}
+          onClick={() => void update()}
+          disabled={busy || running}
+          title={
+            running
+              ? t("請先停止伺服器")
+              : version.updateAvailable === true
+                ? undefined
+                : t("重新執行更新(內含檔案完整性驗證);偵測不到版本落差時也可用")
+          }
+        >
+          <FiDownload className="size-4" /> {busy ? t("啟動更新中…") : t("立即更新")}
+        </button>
         <button className={`${btnGhost} inline-flex items-center gap-1.5`} onClick={refresh}>
           <FiRefreshCw className="size-3.5" /> {t("重新檢查")}
         </button>
