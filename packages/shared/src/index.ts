@@ -688,6 +688,27 @@ export interface SavePalRow {
   location: "party" | "palbox" | "base" | "unknown";
 }
 
+export interface SaveItemStack {
+  itemId: string;
+  count: number;
+}
+
+/** 離線物品清單:玩家 .sav 的容器 id × Level.sav 的容器內容 join 而來。 */
+export interface SavePlayerInventory {
+  /** 金幣(static_id "Money" 的總數,已從各清單中抽出) */
+  money: number;
+  /** 背包 */
+  common: SaveItemStack[];
+  /** 重要物品(關鍵道具) */
+  essential: SaveItemStack[];
+  /** 武器欄 */
+  weapons: SaveItemStack[];
+  /** 防具/飾品欄 */
+  armor: SaveItemStack[];
+  /** 食物欄 */
+  food: SaveItemStack[];
+}
+
 export interface SavePlayerProfile {
   uid: string;
   name: string;
@@ -698,6 +719,8 @@ export interface SavePlayerProfile {
   palCount: number;
   /** 依等級降冪;超過上限只留前段(palCount 仍是真實總數) */
   pals: SavePalRow[];
+  /** 離線物品;玩家 .sav 解析不到容器 id 時為 null(舊快照/解析失敗) */
+  inventory?: SavePlayerInventory | null;
 }
 
 export interface SavePlayersSnapshot {

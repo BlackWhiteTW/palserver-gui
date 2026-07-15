@@ -93,15 +93,21 @@ function orgEntry() {
   };
 }
 
-function containerEntry(slotNum: number, itemIds: (string | null)[]) {
+function containerEntry(slotNum: number, items: ({ id: string; count?: number } | null)[], cid = "cid") {
   return {
-    key: { ID: { value: "cid" } },
+    key: { ID: { value: cid } },
     value: {
       SlotNum: { value: `__RAW_${slotNum}__` },
       Slots: {
         value: {
-          values: itemIds.map((id) => ({
-            RawData: { value: { item: { static_id: id ?? "None" } } },
+          values: items.map((it) => ({
+            RawData: {
+              value: {
+                slot_index: `__RAW_0__`,
+                count: `__RAW_${it?.count ?? 0}__`,
+                item: { static_id: it?.id ?? "None" },
+              },
+            },
           })),
         },
       },
@@ -142,7 +148,11 @@ function buildJson(): string {
             ],
           },
           ItemContainerSaveData: {
-            value: [containerEntry(20, ["Wood", null]), containerEntry(10, [null, null]), containerEntry(5, [])],
+            value: [
+              containerEntry(20, [{ id: "Wood", count: 5 }, null]),
+              containerEntry(10, [null, null]),
+              containerEntry(5, []),
+            ],
           },
           CharacterContainerSaveData: { value: [{ key: {}, value: {} }, { key: {}, value: {} }] },
           MapObjectSaveData: {
@@ -262,6 +272,40 @@ test("analyzeLevelJsonStream:帕魯位置依容器對照分類(party/palbox/base
   // 沒給對照表 → 全部 unknown
   const r2 = await analyzeLevelJsonStream(Readable.from([json]), MTIME_MS);
   assert.ok(r2.players[0].pals.every((p) => p.location === "unknown"));
+});
+
+test("analyzeLevelJsonStream:離線物品(背包/裝備/金錢)依容器歸屬收集", async () => {
+  const doc = {
+    properties: {
+      worldSaveData: {
+        value: {
+          CharacterSaveParameterMap: { value: [playerEntry("p1", "X", 9)] },
+          ItemContainerSaveData: {
+            value: [
+              containerEntry(30, [{ id: "Wood", count: 42 }, { id: "Money", count: 12345 }, { id: "Stone", count: 7 }], "ABC0-01"),
+              containerEntry(4, [{ id: "AssaultRifle_Default1", count: 1 }], "abc002"),
+              containerEntry(8, [{ id: "Berries", count: 3 }], "abc999"),
+            ],
+          },
+        },
+      },
+    },
+  };
+  const json = JSON.stringify(doc).replace(/"__RAW_(-?\d+)__"/g, "$1");
+  const owners = new Map<string, { uid: string; kind: "common" | "essential" | "weapons" | "armor" | "food" }>([
+    ["abc001", { uid: "p1", kind: "common" }], // 對照 "ABC0-01" 正規化後
+    ["abc002", { uid: "p1", kind: "weapons" }],
+  ]);
+  const r = await analyzeLevelJsonStream(Readable.from([json]), MTIME_MS, { itemContainerOwners: owners });
+  const inv = r.players.find((p) => p.uid === "p1")!.inventory!;
+  assert.equal(inv.money, 12345); // Money 抽出,不進背包清單
+  assert.deepEqual(inv.common, [{ itemId: "Wood", count: 42 }, { itemId: "Stone", count: 7 }]);
+  assert.deepEqual(inv.weapons, [{ itemId: "AssaultRifle_Default1", count: 1 }]);
+  assert.deepEqual(inv.food, []); // 沒對到的容器(別人的)不會混進來
+
+  // 沒給容器歸屬 → inventory 為 null(舊快照語意)
+  const r2 = await analyzeLevelJsonStream(Readable.from([json]), MTIME_MS);
+  assert.equal(r2.players[0].inventory, null);
 });
 
 test("analyzeLevelJsonStream:荒謬 ticks 回 null 而非硬湊", async () => {

@@ -1227,5 +1227,13 @@
  "搜尋名稱、物種或詞條…": "Search name, species, or passive…",
  "沒有符合搜尋的帕魯。": "No pals match your search.",
  "這個分類沒有帕魯。": "No pals in this category.",
- "(顯示前 {shown} / 共 {total})": "(showing first {shown} of {total})"
+ "(顯示前 {shown} / 共 {total})": "(showing first {shown} of {total})",
+ "金錢": "Money",
+ "物品": "Items",
+ "武器": "Weapons",
+ "防具": "Armor",
+ "重要物品": "Key Items",
+ "食物": "Food",
+ "這個分類沒有物品。": "No items in this category.",
+ "PalDefender 讀不到離線玩家的背包;可用「從存檔刷新」改讀存檔資料。": "PalDefender can't read an offline player's inventory — use \"Refresh from Save\" to read it from the save instead."
 }

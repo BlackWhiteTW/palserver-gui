@@ -5,7 +5,9 @@ import type { Token } from "stream-json/parser.js";
 import type {
   SaveHealthCounts,
   SaveHealthPlayerRow,
+  SaveItemStack,
   SavePalRow,
+  SavePlayerInventory,
   SavePlayerProfile,
 } from "@palserver/shared";
 
@@ -28,11 +30,16 @@ export interface LevelJsonAnalysis {
   players: SavePlayerProfile[];
 }
 
+export type InventoryKind = keyof Omit<SavePlayerInventory, "money">;
+
 export interface AnalyzeOptions {
   /** 容器 id(純 hex 小寫)→ 種類。由 Players/*.sav 解析而來
    *  (OtomoCharacterContainerId = party、PalStorageContainerId = palbox),
    *  帕魯依所在容器分類;沒給就全部 unknown。 */
   containerKinds?: Map<string, "party" | "palbox">;
+  /** 物品容器 id(純 hex 小寫)→ 誰的哪一格(背包/裝備/…)。
+   *  掃描時會把這些容器的內容收進玩家快照的 inventory。 */
+  itemContainerOwners?: Map<string, { uid: string; kind: InventoryKind }>;
 }
 
 /** GUID 正規化成純 hex 小寫(容器 id 比對用)。 */
@@ -51,6 +58,8 @@ const MAX_PLAUSIBLE_DAYS = 3650;
 const INACTIVE_DAYS = 30;
 const MAX_INACTIVE_ROWS = 100;
 const MAX_EMPTY_GUILD_NAMES = 50;
+/** 單一物品清單(背包/裝備/…)保留的品項上限。 */
+const MAX_ITEMS_PER_LIST = 500;
 
 const GUILD_TYPE = "EPalGroupType::Guild";
 
@@ -89,6 +98,11 @@ interface ElementCtx {
   slotNum?: number;
   hasItem?: boolean;
   mapObjectId?: string;
+  /* ItemContainerSaveData 元素:是玩家物品容器時收內容 */
+  keyContainerId?: string;
+  invOwner?: { uid: string; kind: InventoryKind };
+  pendingCount?: number;
+  items?: SaveItemStack[];
   /* CharacterSaveParameterMap 元素的欄位收集(玩家快照用) */
   keyPlayerUid?: string;
   keyInstanceId?: string;
@@ -138,6 +152,17 @@ class Analyzer {
   private readonly playerChars = new Map<string, { name: string; level: number | null; exp: number | null }>();
   /** ownerUid → 名下帕魯明細。 */
   private readonly palsByOwner = new Map<string, { rows: SavePalRow[]; total: number }>();
+  /** uid → 離線物品(玩家容器內容彙整)。 */
+  private readonly inventories = new Map<string, SavePlayerInventory>();
+
+  private getInventory(uid: string): SavePlayerInventory {
+    let inv = this.inventories.get(uid);
+    if (!inv) {
+      inv = { money: 0, common: [], essential: [], weapons: [], armor: [], food: [] };
+      this.inventories.set(uid, inv);
+    }
+    return inv;
+  }
   /** 存檔內的世界時鐘(GameTimeSaveData.RealDateTimeTicks)——上游清理工具
    *  以它為「現在」計算離線天數;拿得到就優先用,mtime 只當 fallback。 */
   private realDateTimeTicks: number | null = null;
@@ -286,6 +311,13 @@ class Analyzer {
         c.itemContainers += 1;
         c.itemSlots += e.slotNum ?? 0;
         if (!e.hasItem) c.itemContainersEmpty += 1;
+        if (e.invOwner) {
+          const inv = this.getInventory(e.invOwner.uid);
+          for (const s of e.items ?? []) {
+            if (s.itemId === "Money") inv.money += s.count;
+            else if (inv[e.invOwner.kind].length < MAX_ITEMS_PER_LIST) inv[e.invOwner.kind].push(s);
+          }
+        }
         break;
       case "CharacterContainerSaveData":
         c.charContainers += 1;
@@ -394,11 +426,23 @@ class Analyzer {
         break;
       }
       case "ItemContainerSaveData":
+        if (rel[0] === "key" && prev === "ID" && last === "value" && t.name === "stringValue") {
+          e.keyContainerId = t.value as string;
+          // key 先於 value 出現:此刻就能判定是不是要收內容的玩家容器
+          e.invOwner = this.opts.itemContainerOwners?.get(normGuid(e.keyContainerId));
+          break;
+        }
         if (prev === "SlotNum" && last === "value" && t.name === "numberValue") {
           e.slotNum = Number(t.value);
+        } else if (last === "count" && t.name === "numberValue" && rel.includes("Slots")) {
+          // 槽位序列化順序:slot_index → count → item.static_id(count 先到,暫存配對)
+          e.pendingCount = Number(t.value);
         } else if (last === "static_id" && t.name === "stringValue") {
           const v = t.value as string;
-          if (v && v !== "None") e.hasItem = true;
+          if (v && v !== "None") {
+            e.hasItem = true;
+            if (e.invOwner) (e.items ??= []).push({ itemId: v, count: e.pendingCount ?? 0 });
+          }
         }
         break;
       case "MapObjectSaveData":
@@ -454,6 +498,7 @@ class Analyzer {
         lastOnlineDaysAgo: days,
         palCount: bucket?.total ?? 0,
         pals,
+        inventory: this.inventories.get(uid) ?? null,
       });
     }
     players.sort((a, b) => (b.level ?? 0) - (a.level ?? 0));

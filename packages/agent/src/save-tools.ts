@@ -16,7 +16,7 @@ import { AGENT_VERSION, DATA_DIR, GITHUB_REPO } from "./env.js";
 import type { InstanceRecord } from "./store.js";
 import type { DriverContext } from "./driver.js";
 import { dirSize, flushWorld, worldDirOf } from "./saves.js";
-import { analyzeLevelJsonFile, normGuid } from "./save-health.js";
+import { analyzeLevelJsonFile, normGuid, type InventoryKind } from "./save-health.js";
 
 /**
  * 存檔健檢(save-slim Stage 1,唯讀)— 外部工具管理 + 任務編排。
@@ -254,16 +254,36 @@ function runConvert(bin: string, savPath: string, jsonPath: string): Promise<voi
   });
 }
 
-/** 解析 Players/*.sav 的容器 id,建「容器 → party(身上)/palbox(帕魯箱)」對照,
- *  讓快照能把帕魯按所在位置分類。單檔失敗不擋整體;檔數設上限防極端伺服器。 */
+/** 解析 Players/*.sav,建兩份容器對照:
+ *  - kinds:角色容器 → party(身上)/palbox(帕魯箱),帕魯位置分類用
+ *  - itemOwners:物品容器 → 誰的哪一格(背包/武器/防具/重要/食物),離線物品用
+ *  單檔失敗不擋整體;檔數設上限防極端伺服器。 */
 const MAX_PLAYER_SAVS = 50;
-async function buildContainerKinds(
-  bin: string,
-  playersDir: string,
-  tmpDir: string,
-): Promise<Map<string, "party" | "palbox">> {
+/** 玩家 .sav 的 InventoryInfo 欄位 → 快照 inventory 分類。 */
+const INVENTORY_FIELDS: Record<string, InventoryKind> = {
+  CommonContainerId: "common",
+  EssentialContainerId: "essential",
+  WeaponLoadOutContainerId: "weapons",
+  PlayerEquipArmorContainerId: "armor",
+  FoodEquipContainerId: "food",
+};
+
+interface ContainerIndex {
+  kinds: Map<string, "party" | "palbox">;
+  itemOwners: Map<string, { uid: string; kind: InventoryKind }>;
+}
+
+const savNameToUuid = (name: string): string => {
+  const h = name.slice(0, 32).toLowerCase();
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+};
+
+type IdProp = { value?: { ID?: { value?: unknown } } };
+
+async function buildContainerIndex(bin: string, playersDir: string, tmpDir: string): Promise<ContainerIndex> {
   const kinds = new Map<string, "party" | "palbox">();
-  if (!fs.existsSync(playersDir)) return kinds;
+  const itemOwners = new Map<string, { uid: string; kind: InventoryKind }>();
+  if (!fs.existsSync(playersDir)) return { kinds, itemOwners };
   const files = fs
     .readdirSync(playersDir)
     .filter((f) => /^[0-9A-Fa-f]{32}\.sav$/.test(f))
@@ -275,20 +295,32 @@ async function buildContainerKinds(
       await fs.promises.copyFile(path.join(playersDir, f), copy);
       await runConvert(bin, copy, out);
       const sd = (JSON.parse(fs.readFileSync(out, "utf8")) as {
-        properties?: { SaveData?: { value?: Record<string, { value?: { ID?: { value?: unknown } } }> } };
+        properties?: { SaveData?: { value?: Record<string, IdProp> } };
       }).properties?.SaveData?.value;
-      const otomo = sd?.OtomoCharacterContainerId?.value?.ID?.value;
-      const storage = sd?.PalStorageContainerId?.value?.ID?.value;
-      if (typeof otomo === "string") kinds.set(normGuid(otomo), "party");
-      if (typeof storage === "string") kinds.set(normGuid(storage), "palbox");
+      const idOf = (p: IdProp | undefined): string | null =>
+        typeof p?.value?.ID?.value === "string" ? (p.value.ID.value as string) : null;
+
+      const otomo = idOf(sd?.OtomoCharacterContainerId);
+      const storage = idOf(sd?.PalStorageContainerId);
+      if (otomo) kinds.set(normGuid(otomo), "party");
+      if (storage) kinds.set(normGuid(storage), "palbox");
+
+      const uid = savNameToUuid(f);
+      const invInfo = (sd?.InventoryInfo ?? sd?.inventoryInfo) as
+        | { value?: Record<string, IdProp> }
+        | undefined;
+      for (const [field, kind] of Object.entries(INVENTORY_FIELDS)) {
+        const cid = idOf(invInfo?.value?.[field]);
+        if (cid) itemOwners.set(normGuid(cid), { uid, kind });
+      }
     } catch {
-      // 個別玩家檔壞掉/格式不符:該玩家的帕魯位置會標 unknown,不擋掃描
+      // 個別玩家檔壞掉/格式不符:該玩家的帕魯位置標 unknown、物品缺席,不擋掃描
     } finally {
       fs.rmSync(copy, { force: true });
       fs.rmSync(out, { force: true });
     }
   }
-  return kinds;
+  return { kinds, itemOwners };
 }
 
 async function runJob(rec: InstanceRecord, ctx: DriverContext, worldGuid: string): Promise<SaveHealthReport> {
@@ -329,8 +361,8 @@ async function runJob(rec: InstanceRecord, ctx: DriverContext, worldGuid: string
 
     job.phase = "convert";
     job.pct = null; // 子行程無進度回報
-    // 先解析玩家檔(小,秒級)建容器對照 → 帕魯能分類成「身上/帕魯箱/據點」
-    const containerKinds = await buildContainerKinds(bin, path.join(worldDir, "Players"), tmpDir);
+    // 先解析玩家檔(小,秒級)建容器對照 → 帕魯位置分類 + 離線物品歸屬
+    const { kinds, itemOwners } = await buildContainerIndex(bin, path.join(worldDir, "Players"), tmpDir);
     const jsonPath = path.join(tmpDir, "Level.sav.json");
     await runConvert(bin, savCopy, jsonPath);
 
@@ -342,7 +374,7 @@ async function runJob(rec: InstanceRecord, ctx: DriverContext, worldGuid: string
       (pct) => {
         job.pct = pct;
       },
-      { containerKinds },
+      { containerKinds: kinds, itemContainerOwners: itemOwners },
     );
 
     const report: SaveHealthReport = {

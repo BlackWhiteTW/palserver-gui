@@ -7,6 +7,7 @@ import {
   type PlayerDetail,
   type PdRestStatus,
   type SavePalRow,
+  type SavePlayerInventory,
   type SavePlayerProfile,
 } from "@palserver/shared";
 import type { AgentClient } from "./api";
@@ -310,6 +311,7 @@ function MergedBody({
           value={prog ? `Lv.${prog.level}` : profile?.level !== null && profile ? `Lv.${profile.level}` : "—"}
         />
         {lastOnline !== null && <Info label={t("最後上線")} value={lastOnline} />}
+        {profile?.inventory && <Info label={t("金錢")} value={profile.inventory.money.toLocaleString()} />}
       </div>
 
       {prog && <Progression prog={prog} />}
@@ -338,9 +340,12 @@ function MergedBody({
         </p>
       )}
 
-      {detail?.available && (
-        <ItemList items={detail.items} gameData={gameData} unavailable={!!detail.itemsUnavailable} />
-      )}
+      <ItemSection
+        inventory={profile?.inventory ?? null}
+        restItems={detail?.available ? detail.items : null}
+        restUnavailable={detail?.available ? !!detail.itemsUnavailable : false}
+        gameData={gameData}
+      />
     </div>
   );
 }
@@ -435,7 +440,7 @@ function PalSection({
   totalHint?: number;
   gameData: GameData | null;
 }) {
-  const [tab, setTab] = useState<PalTab>("all");
+  const [picked, setPicked] = useState<PalTab | null>(null);
   const [query, setQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
   if (pals.length === 0) return null;
@@ -446,6 +451,8 @@ function PalSection({
     palbox: pals.filter((p) => p.location === "palbox").length,
     base: pals.filter((p) => p.location === "base").length,
   };
+  // 預設不選「全部」(幾百隻太多):優先身上,其次帕魯箱;都空才退回全部
+  const tab: PalTab = picked ?? (counts.party > 0 ? "party" : counts.palbox > 0 ? "palbox" : "all");
   const TABS: { id: PalTab; label: string }[] = [
     { id: "all", label: t("全部") },
     { id: "party", label: t("身上") },
@@ -494,7 +501,7 @@ function PalSection({
           <button
             key={id}
             onClick={() => {
-              setTab(id);
+              setPicked(id);
               setShowAll(false);
             }}
             className={`rounded-full border-2 px-3 py-1 text-xs font-bold transition ${
@@ -618,51 +625,109 @@ function PalCard({ p, gameData }: { p: MergedPal; gameData: GameData | null }) {
   );
 }
 
-function ItemList({
-  items,
+type ItemTab = "common" | "weapons" | "armor" | "essential" | "food";
+
+/**
+ * 物品區:離線快照有分類資料時走分頁籤(背包/武器/防具/重要/食物,預設背包,
+ * 不做「全部」— 太多);沒有快照時退回 PalDefender 的即時扁平清單。
+ */
+function ItemSection({
+  inventory,
+  restItems,
+  restUnavailable,
   gameData,
-  unavailable,
 }: {
-  items: PlayerDetail["items"];
+  inventory: SavePlayerInventory | null;
+  restItems: PlayerDetail["items"] | null;
+  restUnavailable: boolean;
   gameData: GameData | null;
-  unavailable?: boolean;
 }) {
-  if (items.length === 0) {
+  const [tab, setTab] = useState<ItemTab>("common");
+
+  // 沒有快照分類資料 → 即時扁平清單(或不可用提示)
+  if (!inventory) {
+    if (!restItems) return null;
+    if (restItems.length === 0) {
+      return (
+        <p className="text-[13px] text-ink-muted">
+          {restUnavailable
+            ? t("PalDefender 讀不到離線玩家的背包;可用「從存檔刷新」改讀存檔資料。")
+            : t("沒有讀取到背包資料。")}
+        </p>
+      );
+    }
+    const merged = new Map<string, number>();
+    for (const s of restItems) merged.set(s.itemId, (merged.get(s.itemId) ?? 0) + s.count);
+    const rows = [...merged.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([itemId, count]) => ({ itemId, count }));
     return (
-      <p className="text-[13px] text-ink-muted">
-        {unavailable ? t("離線玩家的背包資料無法讀取(同上)。") : t("沒有讀取到背包資料。")}
-      </p>
+      <div>
+        <h3 className="mb-2 flex items-center gap-2 text-sm font-extrabold text-ink-muted">
+          <FiPackage className="size-4 text-pal" /> {t("背包")}
+          <span className="rounded-full bg-card-soft px-2 py-0.5 text-xs font-bold">{rows.length}</span>
+        </h3>
+        <ItemGrid rows={rows} gameData={gameData} />
+      </div>
     );
   }
-  // Merge same item across containers for a cleaner overview.
-  const merged = new Map<string, number>();
-  for (const s of items) merged.set(s.itemId, (merged.get(s.itemId) ?? 0) + s.count);
-  const rows = [...merged.entries()].sort((a, b) => b[1] - a[1]);
+
+  const TABS: { id: ItemTab; label: string }[] = [
+    { id: "common", label: t("背包") },
+    { id: "weapons", label: t("武器") },
+    { id: "armor", label: t("防具") },
+    { id: "essential", label: t("重要物品") },
+    { id: "food", label: t("食物") },
+  ];
+  const rows = inventory[tab];
 
   return (
     <div>
-      <h3 className="mb-2 flex items-center gap-2 text-sm font-extrabold text-ink-muted">
-        <FiPackage className="size-4 text-pal" /> {t("背包")}
-        <span className="rounded-full bg-card-soft px-2 py-0.5 text-xs font-bold">{rows.length}</span>
+      <h3 className="mb-2 inline-flex items-center gap-1.5 text-sm font-extrabold text-ink-muted">
+        <FiPackage className="size-4 text-pal" /> {t("物品")}
       </h3>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
-        {rows.map(([itemId, count]) => {
-          const entity = gameData?.itemById.get(itemId);
-          return (
-            <div key={itemId} className="flex items-center gap-2 rounded-xl border-2 border-line p-2">
-              {entity?.icon ? (
-                <img src={itemIconUrl(entity.icon)} alt="" className="size-8 shrink-0" />
-              ) : (
-                <span className="size-8 shrink-0 rounded bg-card-soft" />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-bold">{entity ? displayName(entity) : itemId}</p>
-              </div>
-              <span className="shrink-0 text-sm font-extrabold text-pal">×{count}</span>
-            </div>
-          );
-        })}
+      <div className="mb-2 flex flex-wrap gap-1">
+        {TABS.map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`rounded-full border-2 px-3 py-1 text-xs font-bold transition ${
+              tab === id ? "border-pal bg-pal/10 text-pal" : "border-line text-ink-muted hover:border-ink-muted"
+            }`}
+          >
+            {label}
+            <span className={`ml-1 ${tab === id ? "" : "opacity-70"}`}>{inventory[id].length}</span>
+          </button>
+        ))}
       </div>
+      {rows.length === 0 ? (
+        <p className="py-3 text-center text-[13px] text-ink-muted">{t("這個分類沒有物品。")}</p>
+      ) : (
+        <ItemGrid rows={rows} gameData={gameData} />
+      )}
+    </div>
+  );
+}
+
+function ItemGrid({ rows, gameData }: { rows: { itemId: string; count: number }[]; gameData: GameData | null }) {
+  return (
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
+      {rows.map(({ itemId, count }, i) => {
+        const entity = gameData?.itemById.get(itemId);
+        return (
+          <div key={`${itemId}-${i}`} className="flex items-center gap-2 rounded-xl border-2 border-line p-2">
+            {entity?.icon ? (
+              <img src={itemIconUrl(entity.icon)} alt="" className="size-8 shrink-0" />
+            ) : (
+              <span className="size-8 shrink-0 rounded bg-card-soft" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-bold">{entity ? displayName(entity) : itemId}</p>
+            </div>
+            <span className="shrink-0 text-sm font-extrabold text-pal">×{count}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
