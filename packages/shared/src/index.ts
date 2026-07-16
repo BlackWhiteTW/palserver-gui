@@ -125,8 +125,8 @@ export const CustomPalSchema = z
     })
     .optional(),
   /** 濃縮消耗隻數(PalDefender CondensedPals 吃數量,不是星星等級)。
-   *  滿星(4★)實際需要 116 隻;上限 999 與 UI 的 max 一致,擋荒謬值。 */
-  condensedPals: z.number().int().min(0).max(999).optional(),
+   *  當前版本滿濃縮需 48 隻。 */
+  condensedPals: z.number().int().min(0).max(48).optional(),
   /** 靈魂強化,每項 0–20。 */
   souls: z
     .object({

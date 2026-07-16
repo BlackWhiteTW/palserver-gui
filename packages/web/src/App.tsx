@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GiSheep, GiEggClutch } from "react-icons/gi";
-import { FiActivity, FiAlertTriangle, FiClock, FiCpu, FiDownload, FiHardDrive, FiHeart, FiHelpCircle, FiPlus, FiServer, FiSettings, FiStar, FiUsers, FiZap } from "react-icons/fi";
+import { FiActivity, FiAlertTriangle, FiClock, FiCpu, FiDownload, FiFolder, FiHardDrive, FiHeart, FiHelpCircle, FiPlus, FiServer, FiSettings, FiStar, FiUsers, FiZap } from "react-icons/fi";
 import { hasFeature } from "@palserver/shared";
 import type { Backend, ExternalWorldCandidate, InstanceStats, InstanceSummary, LiveStatus } from "@palserver/shared";
 import {
@@ -28,6 +28,7 @@ import { SettingsModal } from "./SettingsModal";
 import { CreditsModal } from "./CreditsModal";
 import { InstanceDetailPage } from "./InstanceDetail";
 import { Mascot } from "./Mascot";
+import { DirectoryPicker } from "./DirectoryPicker";
 import { AnnouncementPopup } from "./AnnouncementModal";
 import { ImportSaveModal } from "./ImportSaveModal";
 import { OPEN_SETTINGS_EVENT, SiteFooter } from "./SiteFooter";
@@ -545,6 +546,8 @@ function CreateDialog({
   const [platform, setPlatform] = useState<string | null>(null);
   const [availableBackends, setAvailableBackends] = useState<Backend[]>(["native"]);
   const [advancedMode, setAdvancedMode] = useState(false);
+  const [showDirPicker, setShowDirPicker] = useState(false);
+
   // k8s 是把伺服器跑在叢集裡(agent 只是遙控),所以 agent 這台是不是 macOS 無所謂。
   const isMac = platform === "darwin" && backend !== "k8s";
   const k8sIncomplete = backend === "k8s" && (!k8sNamespace.trim() || !k8sStatefulSet.trim());
@@ -726,20 +729,41 @@ function CreateDialog({
         {backend === "native" && (
           <label className={labelCls}>
             {t("伺服器路徑(選填)")}
-            <input
-              className={inputCls}
-              value={serverDir}
-              onChange={(e) => setServerDir(e.target.value)}
-              placeholder={
-                platform === "win32"
-                  ? t("例:{path}", { path: "D:\\palworld\\my-server" })
-                  : t("例:{path}", { path: "/opt/palworld/my-server" })
-              }
-            />
+            <div className="flex gap-2">
+              <input
+                className={`${inputCls} flex-1`}
+                value={serverDir}
+                onChange={(e) => setServerDir(e.target.value)}
+                placeholder={
+                  platform === "win32"
+                    ? t("例:{path}", { path: "D:\\palworld\\my-server" })
+                    : t("例:{path}", { path: "/opt/palworld/my-server" })
+                }
+              />
+              <button
+                type="button"
+                className={`${btnGhost} inline-flex items-center gap-1.5 px-3`}
+                onClick={() => setShowDirPicker(true)}
+                title={t("瀏覽資料夾")}
+              >
+                <FiFolder className="size-4" />
+              </button>
+            </div>
             <span className="text-xs font-normal opacity-70">
               {t("留空 = 安裝到 agent 資料夾。填既有 PalServer 安裝目錄會直接採用;填空資料夾或新路徑則會下載安裝到那裡。")}
             </span>
           </label>
+        )}
+        {showDirPicker && (
+          <DirectoryPicker
+            client={client}
+            initialPath={serverDir}
+            onSelect={(path) => {
+              setServerDir(path);
+              setShowDirPicker(false);
+            }}
+            onClose={() => setShowDirPicker(false)}
+          />
         )}
         <label className={labelCls}>
           {t("遊戲埠(UDP)")}

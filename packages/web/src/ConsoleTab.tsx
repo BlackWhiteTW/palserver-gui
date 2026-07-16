@@ -273,8 +273,15 @@ export function ConsoleTab({
     setBusy(true);
     setError(null);
     try {
-      const res = await client.rconExec(instanceId, command);
-      setLog((prev) => [...prev.slice(-99), { command, output: res.output || t("(無輸出)"), failed: false }]);
+      // pgbroadcast 不走 RCON，改走 REST API 以支援中文
+      if (command.startsWith("pgbroadcast ")) {
+        const message = command.slice("pgbroadcast ".length);
+        await client.announce(instanceId, message);
+        setLog((prev) => [...prev.slice(-99), { command: message, output: t("已發送"), failed: false }]);
+      } else {
+        const res = await client.rconExec(instanceId, command);
+        setLog((prev) => [...prev.slice(-99), { command, output: res.output || t("(無輸出)"), failed: false }]);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setLog((prev) => [...prev.slice(-99), { command, output: message, failed: true }]);
@@ -439,6 +446,7 @@ export function ConsoleTab({
 
         {/* 工作區:選定指令的參數 + 唯一輸入列 + 輸出(有內容才出現) */}
         <div className="flex min-h-0 flex-col gap-3">
+
           {selected && selected.args.length > 0 && (
             <div className="flex shrink-0 flex-col gap-3 rounded-cute border-2 border-line p-3">
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">

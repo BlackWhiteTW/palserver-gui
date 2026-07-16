@@ -25,6 +25,7 @@ import {
   type InstanceSummary,
   type KnownPlayer,
   type RconCommandsResponse,
+  type DirEntry,
 } from "@palserver/shared";
 import { fetchServerCommands, rconExec, requireRcon } from "./rcon.js";
 import type { PresenceTracker } from "./presence.js";
@@ -1753,6 +1754,83 @@ export function registerRoutes(
     if (srcRec.id === dstRec.id) throw Object.assign(new Error("不能鏡像到自己"), { statusCode: 409 });
     const result = await saves.mirrorWorld(srcRec, ctxOf(srcRec), dstRec, ctxOf(dstRec));
     return { mirrored: true, worldGuid: result.worldGuid, targetId: dstRec.id };
+  });
+
+  // ── host directory browser (for server path picker in create dialog) ──
+  const HostDirQuery = z.object({ path: z.string().max(1000).default("") });
+
+  /** 列出 Windows 上所有可用的磁碟機代號。 */
+  function listDrives(): DirEntry[] {
+    const drives: DirEntry[] = [];
+    for (let i = 65; i <= 90; i++) {
+      const letter = String.fromCharCode(i);
+      const root = `${letter}:\\`;
+      try {
+        fs.accessSync(root, fs.constants.F_OK);
+        drives.push({
+          name: root,
+          isDir: true,
+          size: 0,
+          modifiedAt: "",
+          editable: false,
+        });
+      } catch {
+        // 不存在的磁碟機
+      }
+    }
+    return drives;
+  }
+
+  app.get("/api/host/list-dir", async (req) => {
+    const { path: dirPath } = HostDirQuery.parse(req.query);
+    const target = dirPath.trim();
+
+    // Windows: 空路徑 → 列出所有可用磁碟機
+    if (!target && process.platform === "win32") {
+      return { path: "", entries: listDrives() };
+    }
+
+    const resolved = target ? path.resolve(target) : "/";
+    if (target && !path.isAbsolute(target)) {
+      throw Object.assign(new Error("請輸入絕對路徑"), { statusCode: 400 });
+    }
+    const stat = fs.statSync(resolved, { throwIfNoEntry: false });
+    if (!stat) throw Object.assign(new Error("路徑不存在"), { statusCode: 404 });
+    if (!stat.isDirectory()) throw Object.assign(new Error("不是資料夾"), { statusCode: 400 });
+    const entries: DirEntry[] = fs
+      .readdirSync(resolved, { withFileTypes: true })
+      .flatMap((entry) => {
+        try {
+          const full = path.join(resolved, entry.name);
+          const s = fs.statSync(full, { throwIfNoEntry: false });
+          if (!s) return [];
+          return {
+            name: entry.name,
+            isDir: entry.isDirectory(),
+            size: s.size,
+            modifiedAt: new Date(s.mtimeMs).toISOString(),
+            editable: false,
+          } satisfies DirEntry;
+        } catch {
+          return []; // 跳過權限不足或無法存取的項目 (如 DumpStack.log.tmp)
+        }
+      })
+      .sort((a, b) => (a.isDir === b.isDir ? a.name.localeCompare(b.name) : a.isDir ? -1 : 1));
+    return { path: resolved, entries };
+  });
+
+  app.post("/api/host/mkdir", async (req, reply) => {
+    const { path: dirPath } = z.object({ path: z.string().min(1).max(1000) }).parse(req.body);
+    if (!path.isAbsolute(dirPath)) {
+      throw Object.assign(new Error("請輸入絕對路徑"), { statusCode: 400 });
+    }
+    const resolved = path.resolve(dirPath);
+    if (fs.existsSync(resolved)) {
+      throw Object.assign(new Error("路徑已存在"), { statusCode: 409 });
+    }
+    fs.mkdirSync(resolved, { recursive: true });
+    reply.code(201);
+    return { created: resolved };
   });
 
   // ── file browser (native server root or k8s /palworld root) ──

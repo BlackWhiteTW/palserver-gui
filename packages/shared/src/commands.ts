@@ -89,13 +89,6 @@ export const COMMANDS: CommandSpec[] = [
   { name: "ShowPlayers", source: "builtin", category: "players", label: "列出所有在線玩家", args: [] },
   { name: "Save", source: "builtin", category: "server", label: "儲存世界資料", args: [] },
   {
-    name: "Broadcast",
-    source: "builtin",
-    category: "server",
-    label: "廣播訊息(內建指令不支援空白字元)",
-    args: [{ name: "message", label: "訊息", required: true, placeholder: "Hello_everyone" }],
-  },
-  {
     name: "Shutdown",
     source: "builtin",
     category: "server",
@@ -121,7 +114,7 @@ export const COMMANDS: CommandSpec[] = [
     name: "pgbroadcast",
     source: "paldefender",
     category: "server",
-    label: "廣播訊息(支援空白字元)",
+    label: "廣播訊息(支援中文)",
     args: [{ name: "message", label: "訊息", required: true, placeholder: "伺服器將在 5 分鐘後重啟" }],
   },
   {
