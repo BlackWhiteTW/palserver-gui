@@ -534,7 +534,7 @@ function CreateDialog({
   const [name, setName] = useState("");
   const [backend, setBackend] = useState<"native" | "docker" | "k8s">("native");
   const [serverDir, setServerDir] = useState("");
-  const [gamePort, setGamePort] = useState(8211);
+  const [gamePort, setGamePort] = useState(""); // 空 = 自動分配
   const [maxPlayers, setMaxPlayers] = useState(32);
   const [serverPassword, setServerPassword] = useState("");
   const [k8sNamespace, setK8sNamespace] = useState("");
@@ -578,7 +578,7 @@ function CreateDialog({
         backend,
         // 強化 = 啟動安裝完伺服器檔案後,自動裝 UE4SS + PalDefender(agent 端 autoEnhance)
         flavor: enhanced ? "modded" : "vanilla",
-        gamePort,
+        gamePort: gamePort.trim() === "" ? undefined : Number(gamePort),
         serverDir: backend === "native" && serverDir.trim() ? serverDir.trim() : undefined,
         dockerImage: backend === "docker" && dockerImage.trim() ? dockerImage.trim() : undefined,
         k8sNamespace: backend === "k8s" ? k8sNamespace.trim() : undefined,
@@ -805,8 +805,11 @@ function CreateDialog({
                   <input
                     className={inputCls}
                     type="number"
+                    min={1024}
+                    max={65535}
                     value={gamePort}
-                    onChange={(e) => setGamePort(Number(e.target.value))}
+                    placeholder={t("自動(從 8211 起找可用埠)")}
+                    onChange={(e) => setGamePort(e.target.value)}
                   />
                   <span className="text-xs font-normal opacity-70">
                     {t("朋友連線用的「門牌號碼」,預設 8211 即可。從網際網路直連需在路由器開放此 UDP 埠;用 VPN(如 Tailscale)則不用開,教學見官網。")}

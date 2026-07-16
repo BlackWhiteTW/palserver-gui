@@ -50,7 +50,7 @@ import { SERVER_LAUNCHER, classifyServerDir, detectManualIniEdits, installProgre
 import { cachedVersionSummary, getVersionStatus } from "./version.js";
 import { getConnectionInfo } from "./connectivity.js";
 import { getModsStatus, installComponent, installedEnhancements, removeComponent, setLuaModEnabled } from "./mods.js";
-import { checkPorts } from "./port-check.js";
+import { checkPorts, udpPortFree } from "./port-check.js";
 import * as pakMods from "./pak-mods.js";
 import { clearPalStats, getPalSchemaStatus, getPalStats, installPalSchema, removePalSchema, writePalStats } from "./palschema.js";
 import { getModerationLists, moderation } from "./moderation.js";
@@ -410,8 +410,19 @@ export function registerRoutes(
     }
     // 所有 backend 統一 port 衝突檢測：外部連線需 1:1 映射正確，每實例 port 唯一。
     // 跨欄位檢查:遊戲埠與各實例查詢埠同為 UDP,撞到一樣 bind 不起來。
-    if (store.usedUdpPorts().has(input.gamePort)) {
-      return reply.code(409).send({ error: `game port ${input.gamePort} already in use` });
+    // 沒明給遊戲埠 → 自動分配:從 8211 起找「沒被其他實例登記」且(本機後端)
+    // 「OS 真的綁得起來」的埠,新手開第二台不再撞 8211。
+    let gamePort = input.gamePort;
+    if (gamePort === undefined) {
+      const used = store.usedUdpPorts();
+      gamePort = 8211;
+      for (;;) {
+        const osFree = input.backend === "k8s" ? true : await udpPortFree(gamePort);
+        if (!used.has(gamePort) && osFree) break;
+        gamePort++;
+      }
+    } else if (store.usedUdpPorts().has(gamePort)) {
+      return reply.code(409).send({ error: `game port ${gamePort} already in use` });
     }
     // REST API 埠:使用者明給就尊重並擋撞埠(跨欄位含 RCON,同為 TCP);沒給就稍後自動分配。
     const explicitRestPort = input.settings?.RESTAPIEnabled !== false ? input.settings?.RESTAPIPort : undefined;
@@ -460,7 +471,7 @@ export function registerRoutes(
     }
     const settings = WorldSettingsSchema.parse({
       ServerName: input.name,
-      PublicPort: input.gamePort,
+      PublicPort: gamePort,
       ...input.settings,
     });
     // k8s: 若 game-server 已運行且有實際 PalWorldSettings.ini，
@@ -474,7 +485,7 @@ export function registerRoutes(
           name: input.name,
           backend: "k8s" as const,
           flavor: input.flavor,
-          gamePort: input.gamePort,
+          gamePort,
           settings,
           createdAt: new Date().toISOString(),
           k8sNamespace: input.k8sNamespace,
@@ -496,8 +507,8 @@ export function registerRoutes(
       name: input.name,
       backend: input.backend,
       flavor: input.flavor,
-      gamePort: input.gamePort,
-      queryPort: store.nextQueryPort([input.gamePort]),
+      gamePort,
+      queryPort: store.nextQueryPort([gamePort]),
       dockerImage: input.backend === "docker" ? input.dockerImage?.trim() || undefined : undefined,
       serverDir,
       serverDirManaged,

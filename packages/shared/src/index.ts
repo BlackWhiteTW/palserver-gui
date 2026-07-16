@@ -79,8 +79,9 @@ export const CreateInstanceSchema = z.object({
   /** docker only: 自訂容器鏡像(如 ghcr.io/…/palworld:tag);省略則用內建的
    * vanilla/modded 映像。方便沿用已在 Docker 部署的其他帕魯鏡像。 */
   dockerImage: z.string().trim().max(200).optional(),
-  /** UDP port the server listens on (host port for docker). */
-  gamePort: z.number().int().min(1024).max(65535).default(8211),
+  /** UDP port the server listens on (host port for docker)。
+   *  省略 = 由 agent 自動分配(從 8211 起找沒被登記且 OS 綁得起來的埠)。 */
+  gamePort: z.number().int().min(1024).max(65535).optional(),
   /** native only: custom server directory (absolute path). An existing
    * dedicated-server install (e.g. C:\steamcmd\steamapps\common\PalServer)
    * is adopted as-is; an empty or new directory becomes the install target.

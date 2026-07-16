@@ -1397,5 +1397,6 @@
   "進階設定(運行方式 / 埠 / 安裝位置)— 新手用預設值就好": "Advanced (backend / ports / install location) — newcomers can leave the defaults",
   "適合新手與時間不多的島主:成長更快、素材更多、死亡不掉裝備。": "Great for newcomers and busy hosts: faster growth, more materials, keep your gear on death.",
   "選一個起跑點就好 — 建立後所有數值都能在「世界設定」分頁隨時微調。": "Just pick a starting point — every value can be fine-tuned later in World Settings.",
-  "首次啟動時自動裝好 UE4SS 與 PalDefender:反作弊保護、進階玩家管理(給道具/傳送/封禁)、更多管理指令。": "UE4SS and PalDefender are installed automatically on first start: anti-cheat protection, advanced player management (give items / teleport / ban) and more admin commands."
+  "首次啟動時自動裝好 UE4SS 與 PalDefender:反作弊保護、進階玩家管理(給道具/傳送/封禁)、更多管理指令。": "UE4SS and PalDefender are installed automatically on first start: anti-cheat protection, advanced player management (give items / teleport / ban) and more admin commands.",
+  "自動(從 8211 起找可用埠)": "Auto (first free port from 8211)"
 }
