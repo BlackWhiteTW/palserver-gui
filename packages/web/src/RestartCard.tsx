@@ -272,13 +272,13 @@ export function RestartCard({ client, instanceId }: { client: AgentClient; insta
                     ))}
                     {times.length < 12 && (
                       <button
-                        className={`${btnGhost} w-fit`}
+                        className={`${btnGhost} inline-flex w-fit items-center gap-1.5`}
                         onClick={() => {
                           setKindOverride("daily-multi");
                           setTimes([...times, ""]);
                         }}
                       >
-                        <FiPlus className="size-4" /> {t("新增時刻")}
+                        <FiPlus className="size-4 shrink-0" /> {t("新增時刻")}
                       </button>
                     )}
                   </div>
