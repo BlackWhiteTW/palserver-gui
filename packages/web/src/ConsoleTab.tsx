@@ -117,18 +117,38 @@ function ArgField({
     );
   }
   if (arg.name === "palid" && gameData) {
+    // BOSS(頭目)變體 = CharacterID 加 BOSS_ 前綴。勾選時只改「送出的值」,
+    // EntityPicker 仍以基礎 id 顯示/搜尋(值本身就是狀態,不需要另外的 state)。
+    const boss = value.startsWith("BOSS_");
+    const bare = boss ? value.slice("BOSS_".length) : value;
     return (
-      <label className={`${labelCls} min-w-0`}>
-        {t(arg.label)}
-        {!arg.required && <span className="font-normal">{t("(選填)")}</span>}
-        <EntityPicker
-          catalog={gameData.pals}
-          iconUrl={palIconUrl}
-          value={value}
-          onChange={onChange}
-          placeholder={t("搜尋帕魯名稱或輸入 ID…")}
-        />
-      </label>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <label className={`${labelCls} min-w-0`}>
+          {t(arg.label)}
+          {!arg.required && <span className="font-normal">{t("(選填)")}</span>}
+          <EntityPicker
+            catalog={gameData.pals}
+            iconUrl={palIconUrl}
+            value={bare}
+            onChange={(v) => onChange(v && boss ? `BOSS_${v}` : v)}
+            placeholder={t("搜尋帕魯名稱或輸入 ID…")}
+          />
+        </label>
+        <label
+          className={`inline-flex w-fit items-center gap-1.5 text-xs font-bold text-ink-muted ${
+            bare ? "cursor-pointer" : "cursor-not-allowed opacity-50"
+          }`}
+        >
+          <input
+            type="checkbox"
+            className="size-4 accent-pal"
+            checked={boss}
+            disabled={!bare}
+            onChange={(e) => onChange(e.target.checked ? `BOSS_${bare}` : bare)}
+          />
+          {t("BOSS(頭目)版本")}
+        </label>
+      </div>
     );
   }
 
