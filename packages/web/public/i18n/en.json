@@ -1398,5 +1398,22 @@
   "適合新手與時間不多的島主:成長更快、素材更多、死亡不掉裝備。": "Great for newcomers and busy hosts: faster growth, more materials, keep your gear on death.",
   "選一個起跑點就好 — 建立後所有數值都能在「世界設定」分頁隨時微調。": "Just pick a starting point — every value can be fine-tuned later in World Settings.",
   "首次啟動時自動裝好 UE4SS 與 PalDefender:反作弊保護、進階玩家管理(給道具/傳送/封禁)、更多管理指令。": "UE4SS and PalDefender are installed automatically on first start: anti-cheat protection, advanced player management (give items / teleport / ban) and more admin commands.",
-  "自動(從 8211 起找可用埠)": "Auto (first free port from 8211)"
+  "自動(從 8211 起找可用埠)": "Auto (first free port from 8211)",
+  "最簡單:免開埠、朋友什麼都不用裝": "Easiest: no port forwarding, friends install nothing",
+  "你和朋友裝同一套免費 VPN": "You and your friends install the same free VPN",
+  "直連": "Direct",
+  "公開 IP + 路由器開埠(進階)": "Public IP + router port forwarding (advanced)",
+  "playit.gg — 免費隧道,五分鐘搞定": "playit.gg — free tunnel, done in five minutes",
+  "playit 給你一個公開位址,自動轉發到這台伺服器:不用動路由器、不怕 CGNAT,朋友直接輸入位址就能玩。": "playit gives you a public address that forwards to this server: no router changes, works behind CGNAT, and friends just type the address.",
+  "到 playit.gg 下載並安裝(免費,支援 Windows/Linux),執行後照指示在網頁按「同意」完成綁定。": "Download and install from playit.gg (free, Windows/Linux). Run it and approve the agent in the browser page it opens.",
+  "在 playit 網頁按「Create Tunnel」:類型選 Custom → UDP,Local port 填 {port}。": "On the playit website press \"Create Tunnel\": type Custom → UDP, local port {port}.",
+  "把 playit 給你的位址(例:xxx.gl.ply.gg:12345)貼到下面,之後這張卡就會顯示給朋友的位址。": "Paste the address playit gives you (e.g. xxx.gl.ply.gg:12345) below — this card will then show it as the address for friends.",
+  "前往 playit.gg": "Open playit.gg",
+  "貼上 playit 位址(例:xxx.gl.ply.gg:12345)": "Paste your playit address (e.g. xxx.gl.ply.gg:12345)",
+  "給朋友的位址(點擊複製):": "Address for friends (click to copy):",
+  "用 VPN 連線": "Connect via VPN",
+  "公開 IP 直連": "Direct via public IP",
+  "你的主機在路由器(NAT)後面:要在路由器把 UDP {port} 轉發到這台電腦,朋友才能用下面的位址連入。CGNAT(電信共享 IP)則開埠也沒用,請改用 playit.gg 或 VPN。": "Your host is behind a router (NAT): forward UDP {port} to this machine so friends can use the address below. Behind CGNAT (carrier-shared IP) port forwarding won't help — use playit.gg or a VPN instead.",
+  "朋友直接輸入下面的位址即可(請確認防火牆放行 UDP {port})。": "Friends can just type the address below (make sure the firewall allows UDP {port}).",
+  "覺得麻煩?交給我們設定": "Sounds like a hassle? Let us set it up"
 }

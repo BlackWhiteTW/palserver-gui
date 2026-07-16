@@ -30,6 +30,8 @@ export interface InstanceRecord {
   engineSettings?: EngineSettings;
   /** 命令列啟動參數(launch options);啟動時由 buildLaunchArgs 組成 -flag。 */
   launchOptions?: LaunchOptions;
+  /** 玩家連線用的公開位址(playit.gg 隧道等,使用者貼上;含埠)。undefined = 未設定。 */
+  externalAddress?: string;
   createdAt: string;
   /** k8s backend: namespace of the game server StatefulSet. */
   k8sNamespace?: string;
@@ -160,7 +162,7 @@ export class InstanceStore {
       Pick<
         InstanceRecord,
         // name/gamePort 由世界設定的 ServerName/PublicPort 鏡射(routes mirrorIdentityFromSettings)
-        "settings" | "serverDir" | "serverDirManaged" | "engineSettings" | "launchOptions" | "queryPort" | "name" | "gamePort"
+        "settings" | "serverDir" | "serverDirManaged" | "engineSettings" | "launchOptions" | "queryPort" | "name" | "gamePort" | "externalAddress"
       >
     >,
   ): InstanceRecord {

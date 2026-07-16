@@ -1516,7 +1516,16 @@ export function registerRoutes(
   // ── game version & updates ──
   app.get("/api/instances/:id/connection", async (req) => {
     const rec = getOr404((req.params as { id: string }).id);
-    return getConnectionInfo(rec.gamePort);
+    const info = await getConnectionInfo(rec.gamePort);
+    return { ...info, externalAddress: rec.externalAddress ?? null };
+  });
+
+  /** 玩家連線用的公開位址(playit.gg 隧道等):使用者在連線卡貼上,存進實例。 */
+  app.put("/api/instances/:id/external-address", async (req) => {
+    const rec = getOr404((req.params as { id: string }).id);
+    const { address } = z.object({ address: z.string().trim().max(120) }).parse(req.body);
+    const updated = store.update(rec.id, { externalAddress: address || undefined });
+    return { externalAddress: updated.externalAddress ?? null };
   });
 
   app.get("/api/instances/:id/version", async (req) => {

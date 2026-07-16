@@ -67,5 +67,6 @@ export async function getConnectionInfo(gamePort: number): Promise<ConnectionInf
   // If we have a public IP and none of our interfaces hold it, the host sits
   // behind a router (NAT) — direct connections need port forwarding.
   const behindNat = pub !== null && !lan.includes(pub) && !isPrivate(pub) ? true : pub !== null;
-  return { gamePort, lan, vpns, publicIp: pub, behindNat };
+  // externalAddress 由 route 層以實例記錄覆寫(這裡沒有 rec 可讀)
+  return { gamePort, lan, vpns, publicIp: pub, behindNat, externalAddress: null };
 }

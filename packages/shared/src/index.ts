@@ -1078,6 +1078,8 @@ export interface ConnectionInfo {
   publicIp: string | null;
   /** host is behind a router → direct connect needs port forwarding */
   behindNat: boolean;
+  /** 使用者設定的公開位址(playit.gg 隧道等;null = 未設定) */
+  externalAddress: string | null;
 }
 
 export interface AgentInfo {
