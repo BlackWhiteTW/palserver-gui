@@ -300,8 +300,9 @@ export function startAutoScanLoop(deps: {
   return timer;
 }
 
-/** 從完整快照算出精簡統計(每玩家:等級/金錢/圖鑑數/最強帕魯;每公會:成員/據點)。 */
-function computeScanStats(snap: SavePlayersSnapshot): SaveScanStats {
+/** 從完整快照算出精簡統計(每玩家:等級/金錢/圖鑑數/最強帕魯;每公會:成員/據點/實力欄位)。
+ *  export 供單元測試(純函式)。 */
+export function computeScanStats(snap: SavePlayersSnapshot): SaveScanStats {
   const players: SaveScanPlayerStat[] = snap.players.map((p) => {
     let top: SaveScanTopPal | null = null;
     let topKey = -1;
@@ -333,13 +334,30 @@ function computeScanStats(snap: SavePlayersSnapshot): SaveScanStats {
       topPal: top,
     };
   });
-  const guilds = (snap.guilds ?? []).map((g) => ({
-    id: g.id,
-    name: g.name,
-    memberCount: g.members.length,
-    baseCount: g.bases.length,
-    baseCampLevel: g.baseCampLevel,
-  }));
+  // 公會深度欄位:成員以 uid(去連字號、不分大小寫)對回玩家統計
+  const norm = (s: string) => s.replace(/-/g, "").toLowerCase();
+  const playerByUid = new Map(players.map((p) => [norm(p.uid), p]));
+  const guilds = (snap.guilds ?? []).map((g) => {
+    const members = g.members.map((m) => ({ ...m, stat: playerByUid.get(norm(m.uid)) }));
+    const levels = members
+      .map((m) => m.stat?.level)
+      .filter((lv): lv is number => typeof lv === "number");
+    return {
+      id: g.id,
+      name: g.name,
+      memberCount: g.members.length,
+      baseCount: g.bases.length,
+      baseCampLevel: g.baseCampLevel,
+      avgLevel: levels.length > 0 ? Math.round((levels.reduce((a, b) => a + b, 0) / levels.length) * 10) / 10 : null,
+      maxLevel: levels.length > 0 ? Math.max(...levels) : null,
+      activeMembers: members.filter((m) => m.lastOnlineDaysAgo !== null && m.lastOnlineDaysAgo <= 7).length,
+      workerPals: g.bases.reduce((sum, b) => sum + b.workers.length, 0),
+      storageKinds: g.storage ? g.storage.length : null,
+      researchDone: g.research ? g.research.entries.length : null,
+      totalMoney: members.reduce((sum, m) => sum + (m.stat?.money ?? 0), 0),
+      totalPals: members.reduce((sum, m) => sum + (m.stat?.palCount ?? 0), 0),
+    };
+  });
   return { scannedAt: snap.generatedAt, levelSavMtime: snap.levelSavMtime, players, guilds };
 }
 

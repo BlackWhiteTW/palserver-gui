@@ -839,6 +839,35 @@ export interface SaveScanGuildStat {
   memberCount: number;
   baseCount: number;
   baseCampLevel: number | null;
+  /* 以下為深度比較欄位(2026-07 追加;舊統計沒有,消費端要容忍 undefined) */
+  /** 成員平均/最高等級(只算等級已知的成員;無資料為 null) */
+  avgLevel?: number | null;
+  maxLevel?: number | null;
+  /** 7 天內上線過的成員數 */
+  activeMembers?: number;
+  /** 各據點駐守工作帕魯總數 */
+  workerPals?: number;
+  /** 公會倉庫物品種類數(掃不到為 null) */
+  storageKinds?: number | null;
+  /** 公會研究已投入項目數(掃不到為 null) */
+  researchDone?: number | null;
+  /** 成員金錢合計(可解析者) */
+  totalMoney?: number;
+  /** 成員名下帕魯合計 */
+  totalPals?: number;
+}
+
+/** 公會綜合實力評分 — 排行榜排序用,公式顯示在榜單副標,改公式同步改文案。
+ *  平均等級 + 活躍成員×5 + 據點×8 + 據點等級×3 + 駐守帕魯×0.5 + 研究×2。 */
+export function guildScore(g: SaveScanGuildStat): number {
+  return (
+    (g.avgLevel ?? 0) +
+    (g.activeMembers ?? 0) * 5 +
+    g.baseCount * 8 +
+    (g.baseCampLevel ?? 0) * 3 +
+    (g.workerPals ?? 0) * 0.5 +
+    (g.researchDone ?? 0) * 2
+  );
 }
 
 export interface SaveScanStats {

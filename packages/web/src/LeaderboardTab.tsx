@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { FiAward, FiDollarSign, FiHome, FiLock, FiRefreshCw, FiTrendingUp, FiUserPlus, FiUsers, FiZap } from "react-icons/fi";
-import type { AutoScanSetting, SaveScanStats, SaveScanPlayerStat } from "@palserver/shared";
-import { hasFeature, topPalScore } from "@palserver/shared";
+import type { AutoScanSetting, SaveScanStats, SaveScanGuildStat, SaveScanPlayerStat } from "@palserver/shared";
+import { guildScore, hasFeature, topPalScore } from "@palserver/shared";
 import type { AgentClient } from "./api";
 import { displayName, palIconUrl, useGameData, type GameData } from "./gameData";
 import { t, useI18n } from "./i18n";
@@ -194,11 +194,12 @@ export function LeaderboardTab({ client, instanceId }: { client: AgentClient; in
             <Board
               icon={<FiHome className="size-4 text-pal" />}
               title={t("公會榜")}
-              hint={t("依成員數排序")}
-              rows={topBy(latest.guilds, (g) => g.memberCount).map((g) => ({
+              hint={t("綜合實力 = 平均等級 + 活躍成員×5 + 據點×8 + 據點等級×3 + 駐守帕魯×0.5 + 研究×2")}
+              rows={topBy(latest.guilds, (g) => guildScore(g)).map((g) => ({
                 key: g.id,
                 name: g.name,
-                value: `${t("{n} 名成員", { n: g.memberCount })} · ${t("{n} 個據點", { n: g.baseCount })}`,
+                value: t("實力 {score}", { score: Math.round(guildScore(g) * 10) / 10 }),
+                detail: <GuildStatChips g={g} />,
               }))}
             />
           </div>
@@ -257,6 +258,31 @@ function topBy<T>(list: T[], key: (x: T) => number, n = 10): T[] {
 /** 最強帕魯排序鍵:shared 的加權評分(與 agent 端 computeScanStats 同一套公式)。 */
 function topPalKey(p: SaveScanPlayerStat): number {
   return p.topPal ? topPalScore(p.topPal) : -1;
+}
+
+/** 公會列明細:成員/等級/活躍/據點/駐守/倉庫/研究/資產小徽章(舊統計缺的欄位就不顯示)。 */
+function GuildStatChips({ g }: { g: SaveScanGuildStat }) {
+  const chips: string[] = [
+    t("{n} 名成員", { n: g.memberCount }),
+    ...(g.avgLevel !== null && g.avgLevel !== undefined ? [t("平均 Lv.{n}", { n: g.avgLevel })] : []),
+    ...(g.maxLevel !== null && g.maxLevel !== undefined ? [t("最高 Lv.{n}", { n: g.maxLevel })] : []),
+    ...(g.activeMembers !== undefined ? [t("7 日活躍 {n}", { n: g.activeMembers })] : []),
+    `${t("{n} 個據點", { n: g.baseCount })}${g.baseCampLevel !== null ? `(Lv.${g.baseCampLevel})` : ""}`,
+    ...(g.workerPals ? [t("駐守 {n} 隻", { n: g.workerPals })] : []),
+    ...(g.storageKinds !== null && g.storageKinds !== undefined ? [t("倉庫 {n} 種", { n: g.storageKinds })] : []),
+    ...(g.researchDone !== null && g.researchDone !== undefined ? [t("研究 {n} 項", { n: g.researchDone })] : []),
+    ...(g.totalMoney ? [t("資產 {n}", { n: g.totalMoney.toLocaleString() })] : []),
+    ...(g.totalPals ? [t("帕魯 {n} 隻", { n: g.totalPals })] : []),
+  ];
+  return (
+    <div className="flex flex-wrap gap-1">
+      {chips.map((c) => (
+        <span key={c} className="rounded-full bg-card-soft px-1.5 py-0.5 text-[11px] font-bold text-ink-muted">
+          {c}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 /** 詞條小標籤列(最強帕魯榜的明細);詞條 id 經目錄在地化,查不到顯示原始 id。 */

@@ -63,3 +63,46 @@ test("extractPaldeck:只有 unlock flag 也能運作,且去重", () => {
   };
   assert.deepEqual(extractPaldeck(sd), ["Kitsunebi"]);
 });
+
+test("computeScanStats:公會深度欄位(成員等級對聯/活躍/駐守/倉庫/研究/資產)", async () => {
+  const { computeScanStats } = await import("./save-tools.js");
+  const { guildScore } = await import("@palserver/shared");
+  const pal = (level: number, iv: number) => ({
+    instanceId: "i1", characterId: "SheepBall", level, gender: null, rank: 1,
+    isLucky: false, isBoss: false, talentHp: iv, talentShot: 0, talentDefense: 0,
+    passives: ["Rare"], location: "palbox" as const,
+  });
+  const stats = computeScanStats({
+    worldGuid: "w", generatedAt: "2026-07-16T00:00:00Z", levelSavMtime: "2026-07-16T00:00:00Z",
+    players: [
+      { uid: "AA-bb", name: "P1", level: 40, exp: 1, guildName: "G", lastOnlineDaysAgo: 0, palCount: 10,
+        pals: [pal(30, 90)], inventory: { money: 1000, common: [], essential: [], weapons: [], armor: [], food: [] } },
+      { uid: "cc", name: "P2", level: 20, exp: 1, guildName: "G", lastOnlineDaysAgo: 30, palCount: 5,
+        pals: [], inventory: null },
+    ],
+    guilds: [{
+      id: "g1", name: "G", adminUid: null, baseCampLevel: 12,
+      members: [
+        { uid: "aabb", name: "P1", lastOnlineDaysAgo: 0 },  // uid 大小寫/連字號不同也要對上
+        { uid: "cc", name: "P2", lastOnlineDaysAgo: 30 },
+      ],
+      bases: [
+        { id: "b1", name: "b1", x: 0, y: 0, workers: [{ characterId: "SheepBall", level: 9 }] },
+        { id: "b2", name: "b2", x: 0, y: 0, workers: [] },
+      ],
+      storage: [{ itemId: "Wood", count: 3 }, { itemId: "Stone", count: 1 }],
+      research: { currentId: "r2", entries: [{ id: "r1", workAmount: 100 }, { id: "r2", workAmount: 5 }] },
+    }],
+  });
+  const g = stats.guilds[0];
+  assert.equal(g.avgLevel, 30);        // (40+20)/2
+  assert.equal(g.maxLevel, 40);
+  assert.equal(g.activeMembers, 1);    // 7 天內只有 P1
+  assert.equal(g.workerPals, 1);
+  assert.equal(g.storageKinds, 2);
+  assert.equal(g.researchDone, 2);
+  assert.equal(g.totalMoney, 1000);
+  assert.equal(g.totalPals, 15);
+  // 實力分數:平均30 + 活躍1×5 + 據點2×8 + 據點等級12×3 + 駐守1×0.5 + 研究2×2 = 91.5
+  assert.equal(guildScore(g), 91.5);
+});

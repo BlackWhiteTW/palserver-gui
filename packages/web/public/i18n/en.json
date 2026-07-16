@@ -1329,7 +1329,6 @@
   "這是贊助者專屬功能。到「設定 → 贊助者識別碼」輸入識別碼即可使用。": "This is a sponsor-exclusive feature. Enter your sponsor key under Settings → Sponsor key to unlock it.",
   "玩家等級(掃描當下);+n 為與上次掃描相比的成長": "Player level at scan time; +n shows growth since the previous scan",
   "金幣(含離線背包);解析不到金錢的玩家不列入": "Gold coins (including offline inventory); players whose money can't be parsed are excluded",
-  "依成員數排序": "Sorted by member count",
   "每小時自動掃描(伺服器運作中才掃)": "Auto-scan hourly (only while the server is running)",
   "加權評分 = 等級 + IV總和×0.1 + 星級×10 + 詞條數×5;取每位玩家最強一隻": "Weighted score = level + total IVs ×0.1 + stars ×10 + passives ×5; each player's strongest Pal",
   "練級最快:{list}": "Fastest levelers: {list}",
@@ -1339,5 +1338,15 @@
   "自 {when} 起": "since {when}",
   "全服金錢 {sign}{n}": "Server-wide money {sign}{n}",
   "評分 {score}": "Score {score}",
-  "Lv.{lv} · IV {iv} · 主人 {name}": "Lv.{lv} · IV {iv} · Owner {name}"
+  "Lv.{lv} · IV {iv} · 主人 {name}": "Lv.{lv} · IV {iv} · Owner {name}",
+  "綜合實力 = 平均等級 + 活躍成員×5 + 據點×8 + 據點等級×3 + 駐守帕魯×0.5 + 研究×2": "Guild power = avg level + active members ×5 + bases ×8 + base camp level ×3 + worker Pals ×0.5 + research ×2",
+  "實力 {score}": "Power {score}",
+  "平均 Lv.{n}": "Avg Lv.{n}",
+  "最高 Lv.{n}": "Top Lv.{n}",
+  "7 日活躍 {n}": "{n} active (7d)",
+  "駐守 {n} 隻": "{n} worker Pals",
+  "研究 {n} 項": "{n} research entries",
+  "資產 {n}": "Assets {n}",
+  "帕魯 {n} 隻": "{n} Pals",
+  "倉庫 {n} 種": "Storage {n} kinds"
 }
