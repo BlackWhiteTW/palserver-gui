@@ -437,3 +437,71 @@ lang: ja
 - v2.2.5–2.2.6 の修正と合わせて、更新前にクラッシュ残留プロセス(CrashReportClient など)を**自動終了**します —— `0xE0434352` で更新が失敗し続けていた方も、このボタンで成功するはずです
 
 それでも失敗する場合、エラーメッセージに原因(診断出力付き)が直接表示されます。案内に従うか、Discord までお持ちください。
+
+===
+
+---
+id: 2026-07-restart-fix-2-3-0
+title: 有開「排程自動重啟」的島主請更新到 v2.3.0
+lang: zh
+---
+
+舊版有一個重要問題:**排程自動重啟時,沒等舊的伺服器程序完全退出就啟動新的**——結果新程序起不來,伺服器就這樣停到有人發現。
+
+這個問題已在 **v2.3.0** 修復。有使用排程重啟(定時/每日固定時間/記憶體超標)的島主,請把 GUI 更新到 **v2.3.0 以上**:
+
+- 有開自動更新的會自己完成
+- 或到**總覽頁 → 遊戲版本**卡片按「立即更新」
+
+順帶一提,v2.3.0 還帶來排行榜、伺服器大事週報、世界樹地圖、圖鑑收集完成度等一大包新功能,詳見更新說明!
+
+===
+
+---
+id: 2026-07-restart-fix-2-3-0
+title: 有开「排程自动重启」的岛主请更新到 v2.3.0
+lang: zh-CN
+---
+
+旧版有一个重要问题:**排程自动重启时,没等旧的服务器程序完全退出就启动新的**——结果新程序起不来,服务器就这样停到有人发现。
+
+这个问题已在 **v2.3.0** 修复。有使用排程重启(定时/每日固定时间/内存超标)的岛主,请把 GUI 更新到 **v2.3.0 以上**:
+
+- 有开自动更新的会自己完成
+- 或到**总览页 → 游戏版本**卡片按「立即更新」
+
+顺带一提,v2.3.0 还带来排行榜、服务器大事周报、世界树地图、图鉴收集完成度等一大包新功能,详见更新说明!
+
+===
+
+---
+id: 2026-07-restart-fix-2-3-0
+title: Using scheduled auto-restarts? Please update to v2.3.0
+lang: en
+---
+
+Older versions had an important bug: **during a scheduled auto-restart, the new server process was started before the old one had fully exited** — so the new one never came up, and the server stayed down until someone noticed.
+
+This is fixed in **v2.3.0**. If you use scheduled restarts (interval / fixed daily times / memory threshold), please update the GUI to **v2.3.0 or later**:
+
+- With auto-update enabled it happens automatically
+- Or press "Update Now" on the **Overview → Game version** card
+
+Bonus: v2.3.0 also ships leaderboards, the server-highlights digest, the World Tree map, Paldeck completion and more — see the release notes!
+
+===
+
+---
+id: 2026-07-restart-fix-2-3-0
+title: スケジュール自動再起動をお使いの方は v2.3.0 へ更新してください
+lang: ja
+---
+
+旧バージョンには重要な問題がありました:**スケジュール自動再起動の際、旧プロセスの終了を待たずに新プロセスを起動**していたため、新プロセスが立ち上がらず、誰かが気づくまでサーバーが停止したままになることがありました。
+
+この問題は **v2.3.0** で修正済みです。スケジュール再起動(定期/毎日固定時刻/メモリ超過)をお使いの方は、GUI を **v2.3.0 以上**へ更新してください:
+
+- 自動更新が有効なら自動で完了します
+- または**概要ページ → ゲームバージョン**カードの「今すぐ更新」を押してください
+
+ちなみに v2.3.0 では、ランキング、サーバーの出来事レポート、世界樹マップ、図鑑コンプ率など多数の新機能も追加されています。リリースノートをご覧ください!
