@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { FiAward, FiDollarSign, FiHome, FiLock, FiRefreshCw, FiTrendingUp, FiUserPlus, FiUsers, FiZap } from "react-icons/fi";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FiAward, FiDollarSign, FiHelpCircle, FiHome, FiLock, FiRefreshCw, FiTrendingUp, FiUserPlus, FiUsers, FiZap } from "react-icons/fi";
 import type { AutoScanSetting, SaveScanStats, SaveScanGuildStat, SaveScanPlayerStat } from "@palserver/shared";
 import { guildScore, hasFeature, topPalScore } from "@palserver/shared";
 import type { AgentClient } from "./api";
@@ -464,6 +464,38 @@ function MoneySparkline({ series, latestLabel }: { series: number[]; latestLabel
 
 /* ── 榜單卡片 ── */
 
+/** 標題旁的「?」:點開小卡顯示榜單規則/計算方式(手機也能用,點外面關閉)。 */
+function HelpTip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (ev: MouseEvent) => {
+      if (!ref.current?.contains(ev.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+  return (
+    <span ref={ref} className="relative inline-flex shrink-0">
+      <button
+        type="button"
+        aria-label={t("計算方式")}
+        aria-expanded={open}
+        className={`grid size-5 place-items-center rounded-full transition hover:bg-card-soft hover:text-pal ${open ? "bg-card-soft text-pal" : "text-ink-muted/70"}`}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <FiHelpCircle className="size-3.5" />
+      </button>
+      {open && (
+        <div className="absolute top-6 right-0 z-20 w-64 max-w-[75vw] rounded-xl border-2 border-line bg-card p-3 text-[12px] leading-relaxed font-bold text-ink shadow-(--shadow-cute) sm:right-auto sm:left-0">
+          {text}
+        </div>
+      )}
+    </span>
+  );
+}
+
 function Board({
   icon,
   title,
@@ -472,7 +504,7 @@ function Board({
 }: {
   icon: React.ReactNode;
   title: string;
-  /** 榜單規則一句話(顯示在標題下) */
+  /** 榜單規則/計算方式(收在標題旁的「?」小卡裡) */
   hint?: string;
   rows: {
     key: string;
@@ -486,12 +518,10 @@ function Board({
 }) {
   return (
     <div className={`${card} flex flex-col gap-2`}>
-      <div>
-        <p className="inline-flex items-center gap-1.5 text-sm font-extrabold text-ink-muted">
-          {icon} {title}
-        </p>
-        {hint && <p className="mt-0.5 text-[11px] text-ink-muted/80">{hint}</p>}
-      </div>
+      <p className="inline-flex items-center gap-1.5 text-sm font-extrabold text-ink-muted">
+        {icon} {title}
+        {hint && <HelpTip text={hint} />}
+      </p>
       {rows.length === 0 ? (
         <p className="text-[13px] text-ink-muted">{t("沒有資料")}</p>
       ) : (
