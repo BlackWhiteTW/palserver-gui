@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FiAlertTriangle, FiFileText, FiMessageSquare, FiShield } from "react-icons/fi";
+import { FiAlertTriangle, FiCheck, FiDownload, FiFileText, FiMessageSquare, FiShield } from "react-icons/fi";
 import {
   PALDEFENDER_OPTIONS,
   PD_MOTD_MAX_LINES,
@@ -10,6 +10,7 @@ import {
   type PdOptionKey,
   type PdOptionMeta,
   type PdRestStatus,
+  type ModsStatus,
 } from "@palserver/shared";
 import type { AgentClient } from "./api";
 import { FileEditor } from "./FileManager";
@@ -47,15 +48,20 @@ export function PalDefenderTab({
   const [saving, setSaving] = useState(false);
   const [editingRaw, setEditingRaw] = useState<string | null>(null);
   const [rest, setRest] = useState<PdRestStatus | null>(null);
+  // 版本管理(從「模組」分頁移來):更新到最新版 / 安裝測試版
+  const [mods, setMods] = useState<ModsStatus | null>(null);
+  const [verBusy, setVerBusy] = useState<"stable" | "beta" | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [next, restStatus] = await Promise.all([
+      const [next, restStatus, modStatus] = await Promise.all([
         client.palDefenderConfig(instanceId),
         client.palDefenderRest(instanceId).catch(() => null),
+        client.mods(instanceId).catch(() => null),
       ]);
       setStatus(next);
       setRest(restStatus);
+      setMods(modStatus);
       setDraft(Object.fromEntries(KEYS.map((k) => [k, effective(next.values, k)])));
       setMotdDraft(next.motd.join("\n"));
       setError(null);
@@ -84,6 +90,24 @@ export function PalDefenderTab({
       <EmptyState icon={<FiShield />}>{status.reason}</EmptyState>
     );
   }
+
+  const installVersion = async (channel: "stable" | "beta") => {
+    if (channel === "beta" && !confirm(t("測試版(Beta)可能不穩定,但含較新的功能(例如玩家細節 API)。\n\n確定要安裝最新測試版嗎?"))) {
+      return;
+    }
+    setVerBusy(channel);
+    setError(null);
+    try {
+      await client.installMod(instanceId, "paldefender", channel);
+      setNotice(t("安裝或更新後,重啟伺服器才會生效。"));
+      setTimeout(() => setNotice(null), 3500);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setVerBusy(null);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -127,6 +151,41 @@ export function PalDefenderTab({
         </button>
       </div>
       {!status.exists && status.reason && <p className="text-[13px] text-sun">{status.reason}</p>}
+
+      {/* 版本管理(從「模組」分頁移來):PalDefender 的更新與測試版 */}
+      <div className={`${card} flex flex-wrap items-center justify-between gap-3`}>
+        <div className="inline-flex min-w-0 items-center gap-2">
+          <span className="text-sm font-extrabold text-ink-muted">{t("PalDefender 版本")}</span>
+          {mods?.paldefender.installed && (
+            <span className="inline-flex items-center gap-1 rounded-full border-[1.5px] border-grass/40 bg-grass/15 px-3 py-1 text-xs font-bold text-grass">
+              <FiCheck className="size-3.5" />
+              {t("已安裝")}{mods.paldefender.version ? ` ${mods.paldefender.version}` : ""}
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            className={`${btn} inline-flex items-center gap-1.5`}
+            onClick={() => void installVersion("stable")}
+            disabled={verBusy !== null || running}
+            title={running ? t("請先停止伺服器") : undefined}
+          >
+            <FiDownload className="size-4" />
+            {verBusy === "stable" ? t("安裝中…") : t("更新到最新版")}
+          </button>
+          <button
+            className={`${btnGhost} inline-flex items-center gap-1.5`}
+            onClick={() => void installVersion("beta")}
+            disabled={verBusy !== null || running}
+            title={running ? t("請先停止伺服器") : t("安裝最新測試版(含較新功能,可能不穩定)")}
+          >
+            {verBusy === "beta" ? t("安裝中…") : t("安裝測試版")}
+          </button>
+        </div>
+        <p className="w-full text-xs text-ink-muted">
+          {t("「玩家細節(查看帕魯/背包)」需要 v1.8.0 以上的測試版才支援。")}{t("安裝或更新後,重啟伺服器才會生效。")}
+        </p>
+      </div>
 
       <RestStatusCard
         rest={rest}

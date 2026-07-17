@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { GiShield, GiScrollUnfurled } from "react-icons/gi";
-import { FiDownload, FiCheck, FiPackage, FiFolder, FiTrash2, FiAlertTriangle, FiSettings } from "react-icons/fi";
+import { FiPackage, FiFolder, FiTrash2, FiAlertTriangle } from "react-icons/fi";
 import type { ModComponent, ModsStatus } from "@palserver/shared";
 import type { AgentClient } from "./api";
 import { FileBrowserDialog } from "./FileManager";
+import { ModInstallCard } from "./ModInstallCard";
 import { t, useI18n } from "./i18n";
-import { EmptyState, btn, btnGhost, card, errorCls, DismissibleWarning } from "./ui";
+import { EmptyState, btnGhost, card, errorCls, DismissibleWarning } from "./ui";
 
 const COMPONENTS: {
   id: ModComponent;
@@ -157,69 +158,31 @@ export function ModsTab({
       <div className="grid gap-4 sm:grid-cols-2">
         {COMPONENTS.map((c) => {
           const state = mods[c.id];
+          // PalDefender 已安裝:版本更新/測試版移至「反作弊插件」分頁,這裡只留設定與移除
+          const pdInstalled = c.id === "paldefender" && state.installed;
           return (
-            <div key={c.id} className={card}>
-              <div className="flex items-start gap-3">
-                {c.icon}
-                <div className="flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-base font-extrabold">{t(c.title)}</h3>
-                    {state.installed && (
-                      <span className="inline-flex items-center gap-1 rounded-full border-[1.5px] border-grass/40 bg-grass/15 px-3 py-1 text-xs font-bold text-grass">
-                        <FiCheck className="size-3.5" />
-                        {t("已安裝")}{state.version ? ` ${state.version}` : ""}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-[13px] text-ink-muted">{t(c.desc)}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      className={`${btn} inline-flex items-center gap-1.5`}
-                      onClick={() => install(c.id)}
-                      disabled={busy !== null || running}
-                      title={running ? t("請先停止伺服器") : undefined}
-                    >
-                      <FiDownload className="size-4" />
-                      {busy === c.id ? t("安裝中…") : state.installed ? t("更新到最新版") : t("安裝穩定版")}
-                    </button>
-                    <button
-                      className={`${btnGhost} inline-flex items-center gap-1.5`}
-                      onClick={() => install(c.id, "beta")}
-                      disabled={busy !== null || running}
-                      title={running ? t("請先停止伺服器") : t("安裝最新測試版(含較新功能,可能不穩定)")}
-                    >
-                      {t("安裝測試版")}
-                    </button>
-                    {c.id === "paldefender" && state.installed && onOpenPalDefender && (
-                      <button
-                        className={`${btnGhost} inline-flex items-center gap-1.5`}
-                        onClick={onOpenPalDefender}
-                        title={t("開啟 PalDefender 分頁調整反作弊、廣播、玩家管理等設定")}
-                      >
-                        <FiSettings className="size-4" />
-                        {t("設定")}
-                      </button>
-                    )}
-                    {state.installed && (
-                      <button
-                        className={`${btnGhost} inline-flex items-center gap-1.5 text-berry hover:border-berry`}
-                        onClick={() => uninstall(c.id)}
-                        disabled={busy !== null || running}
-                        title={running ? t("請先停止伺服器") : t("移除此模組")}
-                      >
-                        <FiTrash2 className="size-4" />
-                        {busy === c.id ? t("處理中…") : t("移除")}
-                      </button>
-                    )}
-                  </div>
-                  {c.id === "paldefender" && (
-                    <p className="mt-2 text-xs text-ink-muted">
-                      {t("「玩家細節(查看帕魯/背包)」需要 v1.8.0 以上的測試版才支援。")}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
+            <ModInstallCard
+              key={c.id}
+              icon={c.icon}
+              title={t(c.title)}
+              desc={t(c.desc)}
+              installed={state.installed}
+              version={state.version}
+              running={running}
+              busy={busy === c.id}
+              onInstall={pdInstalled ? undefined : () => void install(c.id)}
+              onInstallBeta={pdInstalled ? undefined : () => void install(c.id, "beta")}
+              onOpen={c.id === "paldefender" && state.installed ? onOpenPalDefender : undefined}
+              openTitle={t("開啟 PalDefender 分頁調整反作弊、廣播、玩家管理等設定")}
+              onUninstall={() => void uninstall(c.id)}
+              note={
+                c.id === "paldefender"
+                  ? state.installed
+                    ? t("版本更新與測試版安裝已移至「反作弊插件」分頁。")
+                    : t("「玩家細節(查看帕魯/背包)」需要 v1.8.0 以上的測試版才支援。")
+                  : undefined
+              }
+            />
           );
         })}
       </div>

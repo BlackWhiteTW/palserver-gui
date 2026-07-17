@@ -1488,5 +1488,7 @@
   "最長運行時間": "Longest uptime",
   "最久世界天數": "Oldest world (days)",
   "帕魯數值調整": "Pal stat tuning",
-  "反作弊插件": "Anti-cheat plugin"
+  "反作弊插件": "Anti-cheat plugin",
+  "版本更新與測試版安裝已移至「反作弊插件」分頁。": "Version updates and beta installs have moved to the \"Anti-cheat plugin\" tab.",
+  "PalDefender 版本": "PalDefender version"
 }
