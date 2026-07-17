@@ -15,13 +15,20 @@ import { DATA_DIR } from "./env.js";
 
 // 注意:PowerShell 5.1 只有在有 BOM 時才把 .ps1 當 UTF-8 讀,否則中文會亂碼 —— 寫檔時補上 BOM。
 // 這裡刻意不用 PowerShell 的反引號逸出(`n 之類),以免和 TS 樣板字串的反引號打架。
-const TRAY_PS1 = String.raw`param([string]$Url, [string]$Code, [int]$AgentPid)
+const TRAY_PS1 = String.raw`param([string]$Url, [string]$Code, [int]$AgentPid, [string]$IconPng)
 $ErrorActionPreference = 'SilentlyContinue'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 $notify = New-Object System.Windows.Forms.NotifyIcon
+# 圖示與網頁 favicon 同款(web 靜態檔的 logo.png);載入失敗退回系統預設。
 $notify.Icon = [System.Drawing.SystemIcons]::Application
+if ($IconPng -and (Test-Path $IconPng)) {
+  try {
+    $bmp = New-Object System.Drawing.Bitmap($IconPng)
+    $notify.Icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon())
+  } catch { }
+}
 $notify.Text = 'palserver GUI 引擎運作中'
 $notify.Visible = $true
 
@@ -67,7 +74,7 @@ $notify.Dispose()
  * 啟動系統匣圖示。只在 Windows 有效,其他平台回 null。盡力而為:失敗絕不影響 agent 本體
  * (回 null,呼叫端照常運作)。回傳的 ChildProcess 供 agent 結束時一併收掉。
  */
-export function startTray(opts: { url: string; code: string }): ChildProcess | null {
+export function startTray(opts: { url: string; code: string; iconPng?: string | null }): ChildProcess | null {
   if (process.platform !== "win32") return null;
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -91,6 +98,7 @@ export function startTray(opts: { url: string; code: string }): ChildProcess | n
         opts.code,
         "-AgentPid",
         String(process.pid),
+        ...(opts.iconPng ? ["-IconPng", opts.iconPng] : []),
       ],
       { windowsHide: true, stdio: "ignore" },
     );

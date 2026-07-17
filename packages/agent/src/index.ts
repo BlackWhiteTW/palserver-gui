@@ -210,7 +210,12 @@ if (willOpen) openBrowser(`${scheme}://localhost:${PORT}`);
 
 // 背景那份(主控台已隱藏)顯示系統匣圖示,作為「引擎運作中」的提示與控制入口。
 if (process.env.PALSERVER_TRAY_CHILD) {
-  const tray = startTray({ url: `${scheme}://localhost:${PORT}`, code: pairingCode });
+  const tray = startTray({
+    url: `${scheme}://localhost:${PORT}`,
+    code: pairingCode,
+    // 與網頁 favicon 同款(web 靜態檔的 logo.png);純 API 模式(無前端)就用預設圖示。
+    iconPng: webDist ? path.join(webDist, "logo.png") : null,
+  });
   if (tray) {
     const stopTray = () => {
       try {
