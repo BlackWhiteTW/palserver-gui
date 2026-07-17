@@ -20,6 +20,7 @@ import { PlayerDetailModal } from "./PlayerDetailModal";
 import { GuildDetailModal as SaveGuildDetailModal } from "./GuildDetailModal";
 import { PlayerActionsMenu } from "./PlayerActionsMenu";
 import { t, useI18n } from "./i18n";
+import { SHOW_FAST_TRAVEL_UNLOCK } from "./flags";
 import { Overlay, btn, btnGhost, card, errorCls } from "./ui";
 
 /**
@@ -540,7 +541,7 @@ export function MapTab({
           <p className="mt-0.5 text-[13px] text-ink-muted">{summary}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {guildsUnlocked ? (
+          {SHOW_FAST_TRAVEL_UNLOCK && (guildsUnlocked ? (
             <button
               className={`${btnGhost} inline-flex items-center gap-1.5`}
               onClick={() => void unlockFastTravel()}
@@ -559,7 +560,7 @@ export function MapTab({
               <FiZap className="size-4" /> {t("快速傳送全開")}
               <FiStar className="size-3.5 text-pal" />
             </button>
-          )}
+          ))}
           <button
             className={`${btn} inline-flex items-center gap-1.5`}
             onClick={() => setOpen(true)}
