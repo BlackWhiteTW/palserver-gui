@@ -98,9 +98,10 @@ const DEFAULT_MOD_FILES: Record<ModComponent, string[]> = {
 };
 
 export function getModsStatus(rec: InstanceRecord, ctx: DriverContext): ModsStatus {
-  const unsupported = (reason: string): ModsStatus => ({
+  const unsupported = (reason: string, serverInstalled = true): ModsStatus => ({
     supported: false,
     reason,
+    serverInstalled,
     ue4ss: { installed: false, version: null },
     paldefender: { installed: false, version: null },
     luaMods: [],
@@ -118,7 +119,7 @@ export function getModsStatus(rec: InstanceRecord, ctx: DriverContext): ModsStat
   }
   const root = serverRoot(rec, ctx);
   if (!fs.existsSync(win64Dir(root))) {
-    return unsupported("伺服器尚未安裝完成 — 先啟動一次讓 agent 下載伺服器");
+    return unsupported("伺服器尚未安裝完成 — 先啟動一次讓 agent 下載伺服器", false);
   }
 
   const marker = readMarker(root);
@@ -130,6 +131,7 @@ export function getModsStatus(rec: InstanceRecord, ctx: DriverContext): ModsStat
   const modsDir = ue4ssModsDir(root);
   return {
     supported: true,
+    serverInstalled: true,
     ue4ss: { installed: ue4ssInstalled, version: marker.ue4ss ?? null },
     paldefender: { installed: paldefenderInstalled, version: marker.paldefender ?? null },
     luaMods: listLuaMods(root),

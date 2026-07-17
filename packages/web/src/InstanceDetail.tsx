@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FiArrowLeft, FiPlay, FiPlus, FiSend, FiSettings, FiSquare, FiRefreshCw, FiSave, FiTerminal, FiFileText, FiX, FiAlertTriangle, FiAlignLeft, FiStar } from "react-icons/fi";
+import { FiAlertTriangle, FiAlignLeft, FiArrowLeft, FiCheck, FiFileText, FiPlay, FiPlus, FiRefreshCw, FiSave, FiSend, FiSquare, FiStar, FiTerminal, FiX } from "react-icons/fi";
 import type {
   InstanceDetail as Detail,
   LogSource,
@@ -28,9 +28,12 @@ import { maskSteamIdsInText } from "./SteamId";
 import { hasFeature } from "@palserver/shared";
 import { classifyLine, categoryColor, formatLine, genericLine, translateTarget, useLogPrefs } from "./logHighlight";
 import { STATUS_LABELS } from "./labels";
-import { TABS, LOCKED_TABS, useHiddenTabs, useHiddenCards, type Tab } from "./tabPrefs";
+import { TABS, LOCKED_TABS, useHiddenTabs, useHiddenCards, useTabOrder, type Tab } from "./tabPrefs";
 import { t, t as translate, useI18n } from "./i18n";
 import { InstallProgress, Overlay, StatusBadge, btn, btnGhost, card, errorCls, inputCls } from "./ui";
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { CSS as DndCSS } from "@dnd-kit/utilities";
 import { PortConflictModal } from "./PortConflictModal";
 import type { PortsCheckResult } from "./api";
 
@@ -54,8 +57,11 @@ export function InstanceDetailPage({
   // 分頁偏好每實例獨立;預設集合依模式(建立時選強化 or 實際裝了模組)
   const enhancedMode = detail ? detail.flavor === "modded" || detail.enhancements.length > 0 : false;
   const [hiddenTabs, setHiddenTabs] = useHiddenTabs(instanceId, enhancedMode);
+  const [tabOrder, setTabOrder] = useTabOrder(instanceId);
   // 「＋」快速開啟面板:列出被隱藏(且通過 gating)的分頁,點了立刻顯示並切換過去
   const [morePanel, setMorePanel] = useState(false);
+  // 拖曳需移動 6px 才觸發,一般點擊不受影響
+  const tabSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   // 面板寬 224px(w-56):＋按鈕靠螢幕右緣時改右對齊,避免小螢幕橫向溢出
   const [moreAlignRight, setMoreAlignRight] = useState(false);
   const moreRef = useRef<HTMLDivElement | null>(null);
@@ -100,12 +106,18 @@ export function InstanceDetailPage({
   }, [client, instanceId]);
 
   // Gate PalDefender-only tabs on whether the plugin is installed.
-  useEffect(() => {
+  // ModsTab 安裝/移除後呼叫 onModsChanged 重查,分頁即時出現/消失(不用刷新頁面)。
+  const checkPalDefender = useCallback(() => {
     client
       .mods(instanceId)
       .then((m) => setPalDefender(m.supported && m.paldefender.installed))
       .catch(() => setPalDefender(false));
   }, [client, instanceId]);
+  useEffect(() => checkPalDefender(), [checkPalDefender]);
+  // 移除 PalDefender 時人正停在該分頁 → 退回總覽
+  useEffect(() => {
+    if ((tab === "paldefender" || tab === "palstats") && !palDefender) setTab("overview");
+  }, [tab, palDefender]);
 
   useEffect(() => {
     void refresh();
@@ -343,30 +355,42 @@ export function InstanceDetailPage({
         </p>
       )}
 
-      <div className="flex flex-wrap gap-x-2 gap-y-1 border-b-2 border-line">
-        {TABS.filter((t) => t.id !== "paldefender" || palDefender)
-          .filter((t) => t.id !== "palstats" || SHOW_SPONSOR_FEATURES)
-          .filter((t) => LOCKED_TABS.includes(t.id) || !hiddenTabs.includes(t.id))
-          .map((t) => (
-          <button
-            key={t.id}
-            data-tab={t.id}
-            className={
-              t.id === tab
-                ? "-mb-0.5 border-b-[3px] border-pal px-4 py-2 text-sm font-extrabold whitespace-nowrap text-pal"
-                : "px-4 py-2 text-sm font-extrabold whitespace-nowrap text-ink-muted transition hover:text-ink"
-            }
-            onClick={() => setTab(t.id)}
-          >
-            {translate(t.label)}
-          </button>
-        ))}
-        {(() => {
-          const discoverable = TABS.filter((tb) => tb.id !== "paldefender" || palDefender)
-            .filter((tb) => tb.id !== "palstats" || SHOW_SPONSOR_FEATURES)
-            .filter((tb) => !LOCKED_TABS.includes(tb.id) && hiddenTabs.includes(tb.id));
-          if (discoverable.length === 0) return null;
-          return (
+      {(() => {
+        // 依每實例自訂順序排列,再套 gating(PalDefender 裝了才有、贊助旗標)
+        const orderedTabs = tabOrder
+          .map((id) => TABS.find((tb) => tb.id === id))
+          .filter((tb): tb is (typeof TABS)[number] => !!tb)
+          .filter((tb) => tb.id !== "paldefender" || palDefender)
+          .filter((tb) => tb.id !== "palstats" || SHOW_SPONSOR_FEATURES);
+        const visibleTabs = orderedTabs.filter((tb) => LOCKED_TABS.includes(tb.id) || !hiddenTabs.includes(tb.id));
+        const manageable = orderedTabs.filter((tb) => !LOCKED_TABS.includes(tb.id));
+        const onDragEnd = (e: DragEndEvent) => {
+          const { active, over } = e;
+          if (!over || active.id === over.id) return;
+          const ids = visibleTabs.map((tb) => tb.id);
+          const from = ids.indexOf(active.id as Tab);
+          const to = ids.indexOf(over.id as Tab);
+          if (from < 0 || to < 0) return;
+          // 只重排可見分頁,隱藏分頁保持原本的相對位置
+          const moved = arrayMove(ids, from, to);
+          let vi = 0;
+          setTabOrder(tabOrder.map((id) => (ids.includes(id) ? moved[vi++] : id)));
+        };
+        return (
+          <div className="flex flex-wrap gap-x-2 gap-y-1 border-b-2 border-line">
+            <DndContext sensors={tabSensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+              <SortableContext items={visibleTabs.map((tb) => tb.id)} strategy={rectSortingStrategy}>
+                {visibleTabs.map((tb) => (
+                  <SortableTabButton
+                    key={tb.id}
+                    id={tb.id}
+                    active={tb.id === tab}
+                    label={translate(tb.label)}
+                    onSelect={() => setTab(tb.id)}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
             <div ref={moreRef} className="relative">
               <button
                 type="button"
@@ -376,44 +400,49 @@ export function InstanceDetailPage({
                   setMoreAlignRight(!!r && r.left + 224 > window.innerWidth - 16);
                   setMorePanel((v) => !v);
                 }}
-                title={translate("開啟更多分頁")}
-                aria-label={translate("開啟更多分頁")}
+                title={translate("管理分頁")}
+                aria-label={translate("管理分頁")}
               >
                 <FiPlus className="size-4" />
               </button>
               {morePanel && (
                 <div className={`absolute top-full z-30 mt-1 w-56 max-w-[calc(100vw-2rem)] rounded-xl border-2 border-line bg-card p-2 shadow-lg ${moreAlignRight ? "right-0" : "left-0"}`}>
-                  <p className="px-2 py-1 text-xs font-extrabold text-ink-muted">{translate("開啟更多分頁")}</p>
-                  {discoverable.map((tb) => (
-                    <button
-                      key={tb.id}
-                      type="button"
-                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-bold transition hover:bg-card-soft"
-                      onClick={() => {
-                        setHiddenTabs(hiddenTabs.filter((id) => id !== tb.id));
-                        setTab(tb.id);
-                        setMorePanel(false);
-                      }}
-                    >
-                      <FiPlus className="size-3.5 shrink-0 text-pal" /> {translate(tb.label)}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    className="mt-1 flex w-full items-center gap-2 rounded-lg border-t-2 border-line px-2 pb-1.5 pt-2 text-left text-xs font-bold text-ink-muted transition hover:text-ink"
-                    onClick={() => {
-                      setTab("instance");
-                      setMorePanel(false);
-                    }}
-                  >
-                    <FiSettings className="size-3.5 shrink-0" /> {translate("到設定管理分頁")}
-                  </button>
+                  <p className="px-2 py-1 text-xs font-extrabold text-ink-muted">{translate("管理分頁")}</p>
+                  {manageable.map((tb) => {
+                    const shown = !hiddenTabs.includes(tb.id);
+                    return (
+                      <button
+                        key={tb.id}
+                        type="button"
+                        className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-bold transition hover:bg-card-soft ${shown ? "" : "text-ink-muted"}`}
+                        onClick={() => {
+                          if (shown) {
+                            setHiddenTabs([...hiddenTabs, tb.id]);
+                          } else {
+                            setHiddenTabs(hiddenTabs.filter((id) => id !== tb.id));
+                            setTab(tb.id);
+                            setMorePanel(false);
+                          }
+                        }}
+                      >
+                        {shown ? (
+                          <FiCheck className="size-3.5 shrink-0 text-pal" />
+                        ) : (
+                          <FiPlus className="size-3.5 shrink-0" />
+                        )}
+                        {translate(tb.label)}
+                      </button>
+                    );
+                  })}
+                  <p className="border-t-2 border-line px-2 pb-0.5 pt-1.5 text-[11px] text-ink-muted">
+                    {translate("點一下切換顯示;分頁標籤可直接拖曳排序。")}
+                  </p>
                 </div>
               )}
             </div>
-          );
-        })()}
-      </div>
+          </div>
+        );
+      })()}
 
       {tab === "overview" && <OverviewTab client={client} detail={detail} onRefresh={refresh} />}
       {tab === "performance" && (
@@ -458,7 +487,12 @@ export function InstanceDetailPage({
         <EngineTab client={client} instanceId={detail.id} running={detail.status === "running"} />
       )}
       {tab === "mods" && (
-        <ModsTab client={client} instanceId={detail.id} running={detail.status === "running"} />
+        <ModsTab
+          client={client}
+          instanceId={detail.id}
+          running={detail.status === "running"}
+          onModsChanged={checkPalDefender}
+        />
       )}
       {tab === "paldefender" && (
         <PalDefenderTab client={client} instanceId={detail.id} running={detail.status === "running"} />
@@ -545,7 +579,7 @@ function OverviewTab({
           />
         );
         return hiddenCards.includes("invite") ? (
-          <div className="grid items-start gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             {infoCard}
             {versionCard}
           </div>
@@ -564,6 +598,38 @@ function OverviewTab({
         );
       })()}
     </div>
+  );
+}
+
+/** 可拖曳排序的分頁標籤:PointerSensor 距離閾值讓點擊照常運作。 */
+function SortableTabButton({
+  id,
+  active,
+  label,
+  onSelect,
+}: {
+  id: Tab;
+  active: boolean;
+  label: string;
+  onSelect: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <button
+      ref={setNodeRef}
+      data-tab={id}
+      style={{ transform: DndCSS.Transform.toString(transform), transition, touchAction: "none" }}
+      className={`${
+        active
+          ? "-mb-0.5 border-b-[3px] border-pal px-4 py-2 text-sm font-extrabold whitespace-nowrap text-pal"
+          : "px-4 py-2 text-sm font-extrabold whitespace-nowrap text-ink-muted transition hover:text-ink"
+      }${isDragging ? " z-10 opacity-60" : ""}`}
+      onClick={onSelect}
+      {...attributes}
+      {...listeners}
+    >
+      {label}
+    </button>
   );
 }
 

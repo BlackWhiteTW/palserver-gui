@@ -31,10 +31,13 @@ export function ModsTab({
   client,
   instanceId,
   running,
+  onModsChanged,
 }: {
   client: AgentClient;
   instanceId: string;
   running: boolean;
+  /** 安裝/移除模組後通知外層(讓 PalDefender 專屬分頁即時出現/消失)。 */
+  onModsChanged?: () => void;
 }) {
   useI18n();
   const [mods, setMods] = useState<ModsStatus | null>(null);
@@ -70,6 +73,7 @@ export function ModsTab({
     try {
       await client.installMod(instanceId, component, channel);
       await refresh();
+      onModsChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -87,6 +91,7 @@ export function ModsTab({
     try {
       await client.uninstallMod(instanceId, component);
       await refresh();
+      onModsChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -112,6 +117,7 @@ export function ModsTab({
           <FiPackage className="mx-auto mb-2 size-11" />
           {mods.reason}
         </div>
+        {(mods.serverInstalled ?? true) && (
         <PakModCard
           pakMods={pakMods}
           busy={!!busy}
@@ -127,6 +133,7 @@ export function ModsTab({
             finally { setBusy(null); }
           }}
         />
+        )}
       </div>
     );
   }

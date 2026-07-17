@@ -200,6 +200,9 @@ export interface ModsStatus {
   /** false when the backend/platform can't manage mods (docker, non-adopted…). */
   supported: boolean;
   reason?: string;
+  /** 伺服器本體檔案是否已就位;false = 尚未安裝完成(前端據此隱藏 pak 卡等)。
+   *  舊版 agent 沒有此欄位 → 前端以 true 處理。 */
+  serverInstalled?: boolean;
   ue4ss: { installed: boolean; version: string | null };
   paldefender: { installed: boolean; version: string | null };
   /** UE4SS Lua mods found under the mods dir. */

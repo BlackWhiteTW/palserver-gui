@@ -89,6 +89,42 @@ export function useHiddenTabs(instanceId: string, enhanced: boolean): [Tab[], (i
   return [hidden, (ids) => setHiddenTabs(instanceId, ids)];
 }
 
+const ORDER_PREFIX = "palserver.tabOrder."; // 每實例一份的分頁順序
+const ORDER_EVENT = "palserver:taborder";
+
+/** 讀取分頁順序:儲存值剔除未知 id,新版新增的分頁依預設順序補在尾端。 */
+export function getTabOrder(instanceId: string): Tab[] {
+  const all = TABS.map((t) => t.id);
+  try {
+    const raw = JSON.parse(localStorage.getItem(ORDER_PREFIX + instanceId) ?? "null");
+    const stored = Array.isArray(raw) ? (raw.filter((x: Tab) => all.includes(x)) as Tab[]) : [];
+    return [...stored, ...all.filter((id) => !stored.includes(id))];
+  } catch {
+    return all;
+  }
+}
+
+export function setTabOrder(instanceId: string, ids: Tab[]): void {
+  localStorage.setItem(ORDER_PREFIX + instanceId, JSON.stringify(ids));
+  window.dispatchEvent(new Event(ORDER_EVENT));
+}
+
+/** 訂閱某實例的分頁順序(拖曳排序用;跨元件同步)。 */
+export function useTabOrder(instanceId: string): [Tab[], (ids: Tab[]) => void] {
+  const [order, setOrder] = useState<Tab[]>(() => getTabOrder(instanceId));
+  useEffect(() => {
+    setOrder(getTabOrder(instanceId));
+    const onChange = () => setOrder(getTabOrder(instanceId));
+    window.addEventListener(ORDER_EVENT, onChange);
+    window.addEventListener("storage", onChange);
+    return () => {
+      window.removeEventListener(ORDER_EVENT, onChange);
+      window.removeEventListener("storage", onChange);
+    };
+  }, [instanceId]);
+  return [order, (ids) => setTabOrder(instanceId, ids)];
+}
+
 /**
  * 可隱藏的卡片與警告(按叉叉收起,可在設定→「卡片隱藏」恢復)。
  * 兩類共用同一份 localStorage 清單,id 為任意字串;新增可關閉的警告時,
