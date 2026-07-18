@@ -1,13 +1,17 @@
--- PalserverBossReporter v1.1
--- 純伺服器端 UE4SS Lua 模組:每 15 秒輪詢頭目 spawner,輸出狀態到
+-- PalserverBossReporter v1.2
+-- 純伺服器端 UE4SS Lua 模組:每 15 秒輪詢頭目,輸出狀態到
 --   Pal/Saved/palserver-boss-state.json 供 palserver-gui agent 讀取。
 -- 原理(2026-07-19 實機驗證的遊戲內建 API):
+--   野外頭目(bosses[]):
 --   - spawner["Is Field Boss or Imprisonment Boss Spawner"](spawner) → 官方頭目判定
 --   - spawner.IndividualHandleList(TArray<UPalIndividualCharacterHandle*>)→ 目前生成的個體;
 --     逐 handle 讀 TryGetIndividualParameter().SaveParameter.HP.Value 判活(HP>0 活、HP==0 死),
---     讀不到 HP 才退回 TryGetIndividualActor():IsValid()。(tempSpawnedMonster 對活著的頭目也回
---     false,不可用——2026-07-19 實機證實。)
---   - 活→死 / 死→活 的轉變由本模組記時間戳(擊殺時間、實測重生時間)
+--     讀不到 HP 才退回 TryGetIndividualActor():IsValid()。(tempSpawnedMonster 不可用。)
+--   - 活→死 / 死→活 的轉變由本模組記時間戳(擊殺時間、實測重生時間)。
+--   地下城頭目(dungeons[]):
+--   - FindAllOf("PalDungeonInstanceModelFixedDungeon"):BossState(0 存活 / 1 已擊殺,Replicated)、
+--     Level、GetDungeonNameText()(當前語言名稱)、RepFieldWarpPointLocation(入口座標)、
+--     CalcRemainSecondsBy(RespawnBossTimeAt)(遊戲自算的重生剩餘秒,免猜 tick 基準)。
 -- 不改任何遊戲行為;玩家端不需安裝任何東西。
 
 local MOD = "[BossReporter]"
@@ -89,15 +93,42 @@ local function detectAlive(sp)
   return nil                             -- 都拿不到 → 未知
 end
 
+-- 掃地下城頭目:BossState(0 存活/1 已擊殺)、名稱、等級、座標、重生剩餘秒(遊戲自算)。
+-- 回傳 JSON 物件字串陣列。地城實例是伺服器端資料(不需玩家貼著),但只列出目前已生成的。
+local function scanDungeons()
+  local out = {}
+  local ok, insts = pcall(function() return FindAllOf("PalDungeonInstanceModelFixedDungeon") end)
+  if not ok or not insts then return out end
+  local now = os.time()
+  for _, inst in ipairs(insts) do
+    local bs = 0
+    pcall(function() bs = tonumber(inst.BossState) or 0 end)
+    local level = -1
+    pcall(function() level = inst.Level end)
+    local name = "?"
+    pcall(function() name = inst:GetDungeonNameText():ToString() end)
+    local x, y, z = 0, 0, 0
+    pcall(function() local w = inst.RepFieldWarpPointLocation; x, y, z = w.X, w.Y, w.Z end)
+    -- 只有已擊殺(BossState==1)才算重生時間:now + 遊戲自算的剩餘秒。
+    local respawnAt = -1
+    if bs == 1 then
+      local remain = 0
+      pcall(function() remain = inst:CalcRemainSecondsBy(inst, inst.RespawnBossTimeAt) end)
+      if type(remain) == "number" and remain > 0 then respawnAt = now + math.floor(remain) end
+    end
+    out[#out + 1] = string.format(
+      '{"name":"%s","level":%d,"bossState":%d,"respawnAt":%d,"x":%.1f,"y":%.1f,"z":%.1f}',
+      jsonEscape(name), level, bs, respawnAt, x, y, z)
+  end
+  return out
+end
+
 local function scanOnce()
   tickCount = tickCount + 1
-  local ok, spawners = pcall(function() return FindAllOf("BP_PalSpawner_Standard_C") end)
-  if not ok or not spawners then
-    if tickCount % 20 == 1 then log("no spawners loaded (tick " .. tickCount .. ")") end
-    return
-  end
-
   local now = os.time()
+  local ok, spawners = pcall(function() return FindAllOf("BP_PalSpawner_Standard_C") end)
+  if not ok or not spawners then spawners = {} end  -- 沒野外 spawner 也照樣寫地城狀態
+
   local entries = {}
   local bossCount, aliveCount = 0, 0
 
@@ -158,9 +189,11 @@ local function scanOnce()
     end
   end
 
+  local dungeons = {}
+  pcall(function() dungeons = scanDungeons() end)
   local body = string.format(
-    '{"version":1,"generatedAt":%d,"tick":%d,"spawnerTotal":%d,"bossCount":%d,"aliveCount":%d,"bosses":[%s]}',
-    now, tickCount, #spawners, bossCount, aliveCount, table.concat(entries, ","))
+    '{"version":1,"generatedAt":%d,"tick":%d,"spawnerTotal":%d,"bossCount":%d,"aliveCount":%d,"bosses":[%s],"dungeons":[%s]}',
+    now, tickCount, #spawners, bossCount, aliveCount, table.concat(entries, ","), table.concat(dungeons, ","))
   local tmp = STATE_PATH .. ".tmp"
   local f = io.open(tmp, "w")
   if f then
@@ -174,7 +207,7 @@ local function scanOnce()
   end
 end
 
-log("v1.1 loaded; interval " .. INTERVAL_MS .. "ms")
+log("v1.2 loaded; interval " .. INTERVAL_MS .. "ms")
 pcall(loadPrevState)
 LoopAsync(INTERVAL_MS, function()
   ExecuteInGameThread(function()

@@ -38,6 +38,23 @@ export interface BossStateEntry {
   z: number;
 }
 
+/** 地下城頭目(來自 UE4SS 讀 PalDungeonInstanceModelFixedDungeon 的執行期狀態)。
+ *  與野外頭目不同:有遊戲內建的精準重生時間、名稱、且是伺服器端資料(不需玩家貼著)。 */
+export interface DungeonBossEntry {
+  /** 地城名稱(遊戲回傳的當前語言文字,如「冰鳥密域」)。 */
+  name: string;
+  /** 地城等級。 */
+  level: number;
+  /** 0=存活(Spawned)、1=已擊殺(Dead,等重生)。 */
+  bossState: number;
+  /** 已擊殺時的重生 epoch 秒(模組寫檔當下 now + 遊戲自算剩餘秒);存活時 -1。 */
+  respawnAt: number;
+  /** 地城入口世界座標(RepFieldWarpPointLocation);用 bossStateMapCoord 同款轉地圖座標。 */
+  x: number;
+  y: number;
+  z: number;
+}
+
 /** 模組輸出的整份狀態檔。 */
 export interface BossRespawnState {
   version: number;
@@ -48,6 +65,8 @@ export interface BossRespawnState {
   bossCount: number;
   aliveCount: number;
   bosses: BossStateEntry[];
+  /** 地下城頭目(模組 v1.2+;舊模組沒有此欄位)。 */
+  dungeons?: DungeonBossEntry[];
 }
 
 /** agent → web:頭目重生功能的整體狀態。 */
@@ -169,6 +188,23 @@ export function bossRespawnInfo(entry: BossStateEntry | null, nowSec: number): B
     return { status: "dead", diedAt, respawnAt, secondsLeft: respawnAt - nowSec, measured };
   }
   return none;
+}
+
+export interface DungeonBossInfo {
+  status: "alive" | "dead";
+  /** 重生 epoch 秒(dead 時);否則 null。 */
+  respawnAt: number | null;
+  /** 距離重生的秒數(可為負=早該重生);null=存活。 */
+  secondsLeft: number | null;
+}
+
+/** 地城頭目顯示資訊:BossState==1 且有重生時間 → 已擊殺+倒數;否則存活。
+ *  地城重生時間是遊戲內建的(CalcRemainSecondsBy),精準,不像野外頭目要估算。 */
+export function dungeonBossInfo(entry: DungeonBossEntry, nowSec: number): DungeonBossInfo {
+  if (entry.bossState === 1 && entry.respawnAt > 0) {
+    return { status: "dead", respawnAt: entry.respawnAt, secondsLeft: entry.respawnAt - nowSec };
+  }
+  return { status: "alive", respawnAt: null, secondsLeft: null };
 }
 
 /** state 是否過時(模組停了或伺服器沒在跑,回報不再更新)。 */

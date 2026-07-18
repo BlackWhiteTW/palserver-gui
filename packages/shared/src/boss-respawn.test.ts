@@ -6,9 +6,11 @@ import {
   isBossStateStale,
   matchReportedBoss,
   assignReportedBosses,
+  dungeonBossInfo,
   DEFAULT_BOSS_RESPAWN_SECONDS,
   BOSS_MATCH_MAP_RADIUS,
   type BossStateEntry,
+  type DungeonBossEntry,
 } from "./index.js";
 import { savToMap, savToWorldTreeMap, isWorldTreeCoord } from "./index.js";
 
@@ -116,6 +118,29 @@ test("isBossStateStale:新鮮不過時,超過門檻過時", () => {
   assert.equal(isBossStateStale({ generatedAt: now - 10 }, now), false);
   assert.equal(isBossStateStale({ generatedAt: now - 120 }, now), true);
   assert.equal(isBossStateStale(null, now), false);
+});
+
+function dungeon(patch: Partial<DungeonBossEntry>): DungeonBossEntry {
+  return { name: "冰鳥密域", level: 15, bossState: 0, respawnAt: -1, x: 0, y: 0, z: 0, ...patch };
+}
+
+test("dungeonBossInfo:存活(bossState=0)→ alive,無倒數", () => {
+  const r = dungeonBossInfo(dungeon({ bossState: 0 }), 1000);
+  assert.equal(r.status, "alive");
+  assert.equal(r.secondsLeft, null);
+  assert.equal(r.respawnAt, null);
+});
+
+test("dungeonBossInfo:已擊殺(bossState=1)+ 重生時間 → dead + 精準倒數", () => {
+  const r = dungeonBossInfo(dungeon({ level: 60, bossState: 1, respawnAt: 5000 }), 4400);
+  assert.equal(r.status, "dead");
+  assert.equal(r.respawnAt, 5000);
+  assert.equal(r.secondsLeft, 600);
+});
+
+test("dungeonBossInfo:bossState=1 但沒重生時間(respawnAt<=0)→ 當存活(不編倒數)", () => {
+  const r = dungeonBossInfo(dungeon({ bossState: 1, respawnAt: -1 }), 1000);
+  assert.equal(r.status, "alive");
 });
 
 test("bossStateMapCoord 與 savToMap 對主世界座標一致", () => {

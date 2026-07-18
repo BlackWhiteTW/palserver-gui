@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FiAlertTriangle, FiClock, FiStar } from "react-icons/fi";
-import { GiBossKey, GiCrossedSwords, GiDeathSkull } from "react-icons/gi";
+import { GiBossKey, GiCrossedSwords, GiDeathSkull, GiCastle } from "react-icons/gi";
 import {
   hasFeature,
   isWorldTreeCoord,
   assignReportedBosses,
   bossRespawnInfo,
+  dungeonBossInfo,
   type BossRespawnStatus,
   type BossStateEntry,
+  type DungeonBossEntry,
 } from "@palserver/shared";
 import type { AgentClient } from "./api";
 import { ModInstallCard } from "./ModInstallCard";
@@ -69,6 +71,7 @@ export function BossRespawnTab({
   const [notice, setNotice] = useState<string | null>(null);
   const [installing, setInstalling] = useState(false);
   const [hideUnknown, setHideUnknown] = useState(false);
+  const [dungeonOnlyDead, setDungeonOnlyDead] = useState(false);
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
 
   const refresh = useCallback(async () => {
@@ -178,6 +181,26 @@ export function BossRespawnTab({
     return { alive, dead, unknown, total: rows.length };
   }, [rows]);
 
+  // 地下城頭目(伺服器端資料,有遊戲內建的精準重生時間)。
+  const dungeons = status?.state?.dungeons ?? [];
+  interface DRow {
+    d: DungeonBossEntry;
+    info: ReturnType<typeof dungeonBossInfo>;
+    sortKey: number;
+  }
+  const dungeonRows = useMemo<DRow[]>(() => {
+    return dungeons
+      .map((d) => {
+        const info = dungeonBossInfo(d, now);
+        // 重生中(最快先)< 存活
+        const sortKey = info.status === "dead" && info.secondsLeft !== null ? info.secondsLeft : 1e12;
+        return { d, info, sortKey };
+      })
+      .sort((a, b) => a.sortKey - b.sortKey);
+  }, [dungeons, now]);
+  const dungeonDead = dungeonRows.filter((r) => r.info.status === "dead").length;
+  const shownDungeons = dungeonOnlyDead ? dungeonRows.filter((r) => r.info.status === "dead") : dungeonRows;
+
   if (!status) return <p className="text-ink-muted">{error ?? t("載入中…")}</p>;
 
   if (!status.supported) {
@@ -225,7 +248,7 @@ export function BossRespawnTab({
               <FiStar className="size-3" /> {t("贊助者")}
             </span>
           }
-          desc={t("安裝純伺服器端的 UE4SS Lua 模組,每 15 秒回報野外頭目的死活與重生時間。模組只讀取遊戲狀態、不改遊戲內容,玩家端不需安裝任何東西。")}
+          desc={t("安裝純伺服器端的 UE4SS Lua 模組,每 15 秒回報野外頭目與地下城頭目的死活與重生時間。模組只讀取遊戲狀態、不改遊戲內容,玩家端不需安裝任何東西。")}
           installed={status.modInstalled}
           version={status.version ? `${t("模組")} ${status.version}` : null}
           running={running ?? false}
@@ -301,8 +324,76 @@ export function BossRespawnTab({
               )}
             </div>
           )}
+
+          {dungeons.length > 0 && (
+            <div className="mt-1 flex flex-col gap-2 border-t-2 border-line pt-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="inline-flex items-center gap-2 text-[13px] font-bold">
+                  <GiCastle className="size-4 text-pal" /> {t("地下城頭目")}
+                  <span className="text-ink-muted">
+                    {t("已擊殺")} {dungeonDead} / {dungeonRows.length}
+                  </span>
+                </div>
+                <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-bold text-ink-muted">
+                  <input
+                    type="checkbox"
+                    checked={dungeonOnlyDead}
+                    onChange={(e) => setDungeonOnlyDead(e.target.checked)}
+                  />
+                  {t("只顯示重生中的地城")}
+                </label>
+              </div>
+              <p className="text-xs text-ink-muted">
+                {t("地城頭目的重生時間由遊戲直接提供(精準),且是伺服器端資料,不需玩家在附近。")}
+              </p>
+              {shownDungeons.map((r) => (
+                <DungeonRow key={`${r.d.name}:${r.d.x},${r.d.y}`} row={r} />
+              ))}
+              {shownDungeons.length === 0 && (
+                <EmptyState icon={<GiCastle />}>{t("目前沒有重生中的地城頭目。")}</EmptyState>
+              )}
+            </div>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function DungeonRow({
+  row,
+}: {
+  row: { d: DungeonBossEntry; info: ReturnType<typeof dungeonBossInfo> };
+}) {
+  const { d, info } = row;
+  return (
+    <div className={`${card} flex items-center gap-3 !p-3`}>
+      <div className="grid size-10 shrink-0 place-items-center rounded-full border-2 border-line bg-card-soft">
+        <GiCastle className="size-5 text-ink-muted" />
+      </div>
+      <div className="flex min-w-0 flex-col">
+        <span className="truncate text-sm font-extrabold">{d.name || t("地下城")}</span>
+        <span className="text-xs text-ink-muted">{d.level > 0 ? `Lv.${d.level}` : t("地下城")}</span>
+      </div>
+      <div className="ml-auto text-right">
+        {info.status === "alive" ? (
+          <span className="inline-flex items-center gap-1 rounded-full border-[1.5px] border-grass/40 bg-grass/15 px-3 py-1 text-xs font-bold text-grass">
+            <GiCrossedSwords className="size-3.5" /> {t("存活")}
+          </span>
+        ) : (
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="inline-flex items-center gap-1 rounded-full border-[1.5px] border-sun/40 bg-sun/10 px-3 py-1 text-xs font-bold text-sun">
+              <GiDeathSkull className="size-3.5" /> {t("已擊殺")}
+            </span>
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-ink-muted">
+              <FiClock className="size-3" />
+              {info.secondsLeft !== null && info.secondsLeft > 0
+                ? t("重生倒數 {c}", { c: fmtCountdown(info.secondsLeft) })
+                : t("應已重生")}
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
