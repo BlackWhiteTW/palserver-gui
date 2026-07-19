@@ -262,8 +262,8 @@ export function MapTab({
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-    // 公會據點是贊助者限定:非贊助者這裡回空陣列(detailed=false)。開關照樣顯示,
-    // 只是標上星星表示要贊助才有。
+    // 公會據點與公會名稱人人可見;detailed=false(非贊助者)只是拿不到成員詳情,
+    // 點擊據點走存檔版公會彈窗(guildsUnlocked 控制走 REST 詳情或存檔版)。
     client
       .guilds(instanceId)
       .then((g) => {

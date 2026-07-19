@@ -1341,7 +1341,7 @@ export function registerRoutes(
 
   app.get("/api/instances/:id/guilds", async (req) => {
     const rec = getOr404((req.params as { id: string }).id);
-    // 據點位置人人可見;名稱/成員等細節是贊助者先行版功能(guild-map)。
+    // 據點位置與公會名稱人人可見;成員名單/會長等公會詳情才是贊助者先行版功能(guild-map)。
     return getPdGuilds(rec, ctxOf(rec), featureEnabled("guild-map"));
   });
 
