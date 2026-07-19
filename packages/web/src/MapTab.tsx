@@ -1066,9 +1066,11 @@ function PlayerMap({
               `<div>${t(sealed ? "封印領域" : "阿爾法")}${b.lv ? ` · Lv.${b.lv}` : ""}</div>` +
               (dead
                 ? `<div>${
-                    secondsLeft !== null && secondsLeft > 0
-                      ? t("重生倒數 {c}", { c: fmtCountdown(secondsLeft) })
-                      : t("應已重生")
+                    secondsLeft === null
+                      ? t("約下個遊戲日重生")
+                      : secondsLeft > 0
+                        ? t("重生倒數 {c}", { c: fmtCountdown(secondsLeft) })
+                        : t("應已重生")
                   }</div>`
                 : ""),
             { direction: "top", className: "pmap-detail" },

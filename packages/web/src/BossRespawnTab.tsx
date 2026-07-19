@@ -369,7 +369,7 @@ export function BossRespawnTab({
                     </div>
                   )}
                   <p className="text-xs text-ink-muted">
-                    {t("沒有玩家在附近時,遠方區域的頭目不會被載入,狀態顯示為「未知(區域未載入)」。重生倒數以官方預設 60 分鐘估算,實測到一輪重生後改用實測值。")}
+                    {t("頭目狀態需玩家經過附近才會更新,但看過之後會記住(玩家離開不會變回未知)。野外頭目綁「遊戲內時間」重生(約下個遊戲日),沒有固定秒數——實測到一輪完整重生後才顯示精準倒數;地下城頭目重生時間由遊戲內建、精準。")}
                   </p>
                   {bosses === null ? (
                     <p className="text-ink-muted">{t("載入頭目清單…")}</p>
@@ -537,13 +537,19 @@ function StatusChip({
           <GiDeathSkull className="size-3.5" />
           {info.diedAt !== null ? t("已擊殺 {t}", { t: fmtClock(info.diedAt) }) : t("已擊殺(時間未知)")}
         </span>
-        {info.secondsLeft !== null && (
+        {info.secondsLeft !== null ? (
           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-ink-muted">
             <FiClock className="size-3" />
             {info.secondsLeft > 0
               ? t("重生倒數 {c}", { c: fmtCountdown(info.secondsLeft) })
               : t("應已重生")}
             {info.measured ? ` · ${t("實測")}` : ""}
+          </span>
+        ) : (
+          // 沒實測到重生間隔:野外頭目綁遊戲內時間、無固定秒數,不硬給倒數。
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-ink-muted">
+            <FiClock className="size-3" />
+            {t("約下個遊戲日重生")}
           </span>
         )}
       </div>

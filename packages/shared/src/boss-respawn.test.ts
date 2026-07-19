@@ -8,7 +8,6 @@ import {
   assignReportedBosses,
   dungeonBossInfo,
   buildPublicMapBossPoints,
-  DEFAULT_BOSS_RESPAWN_SECONDS,
   BOSS_MATCH_MAP_RADIUS,
   type BossStateEntry,
   type DungeonBossEntry,
@@ -42,15 +41,14 @@ test("bossRespawnInfo:alive=true → alive,無倒數", () => {
   assert.equal(r.secondsLeft, null);
 });
 
-test("bossRespawnInfo:已擊殺 + 有 diedAt,無實測 → 用預設 3600s 倒數", () => {
+test("bossRespawnInfo:已擊殺 + 有 diedAt,無實測 → 已擊殺但不給假倒數(respawnAt/secondsLeft null)", () => {
   const died = 1000;
-  const now = died + 600; // 死後 10 分鐘
-  const r = bossRespawnInfo(entry({ alive: false, diedAt: died }), now);
+  const r = bossRespawnInfo(entry({ alive: false, diedAt: died }), died + 600);
   assert.equal(r.status, "dead");
   assert.equal(r.measured, false);
   assert.equal(r.diedAt, died);
-  assert.equal(r.respawnAt, died + DEFAULT_BOSS_RESPAWN_SECONDS);
-  assert.equal(r.secondsLeft, DEFAULT_BOSS_RESPAWN_SECONDS - 600);
+  assert.equal(r.respawnAt, null);
+  assert.equal(r.secondsLeft, null);
 });
 
 test("bossRespawnInfo:有實測 respawnInterval → 優先採用,measured=true", () => {
@@ -71,19 +69,19 @@ test("bossRespawnInfo:alive=false 但沒觀測到擊殺(diedAt<=0)→ unknown,�
   assert.equal(r.respawnAt, null);
 });
 
-test("bossRespawnInfo:倒數過期為負值(早該重生但模組尚未觀測到)", () => {
+test("bossRespawnInfo:實測倒數過期為負值(早該重生但模組尚未觀測到)", () => {
   const died = 1000;
-  const r = bossRespawnInfo(entry({ alive: false, diedAt: died }), died + DEFAULT_BOSS_RESPAWN_SECONDS + 120);
+  const measured = 1200;
+  const r = bossRespawnInfo(entry({ alive: false, diedAt: died, respawnInterval: measured }), died + measured + 120);
   assert.ok(r.secondsLeft !== null && r.secondsLeft < 0);
 });
 
-test("bossRespawnInfo:擊殺後遺體被清 alive→null,但 diedAt 已記錄 → 仍顯示已擊殺+倒數", () => {
-  // 實機:頭目 HP 歸零記下 diedAt,之後遺體 handle 被清、alive 變 null;倒數要靠 diedAt 續存。
+test("bossRespawnInfo:擊殺後遺體被清 alive→null,但 diedAt 已記錄 → 仍判已擊殺(不因 alive=null 變未知)", () => {
+  // 實機:頭目 HP 歸零記下 diedAt,之後遺體 handle 被清、alive 變 null;狀態要靠 diedAt 續存。
   const died = 1000;
   const r = bossRespawnInfo(entry({ alive: null, diedAt: died }), died + 600);
   assert.equal(r.status, "dead");
-  assert.equal(r.respawnAt, died + DEFAULT_BOSS_RESPAWN_SECONDS);
-  assert.equal(r.secondsLeft, DEFAULT_BOSS_RESPAWN_SECONDS - 600);
+  assert.equal(r.respawnAt, null); // 無實測 → 不給假倒數
 });
 
 test("bossRespawnInfo:死後又重生(respawnedAt 晚於 diedAt)、現在沒人在旁 → 未知,不是已擊殺", () => {
@@ -221,12 +219,20 @@ test("buildPublicMapBossPoints:state=null → 空陣列", () => {
   assert.deepEqual(buildPublicMapBossPoints(null, { field: [{ x: 0, y: 0 }], tree: [] }, 5000), []);
 });
 
-test("buildPublicMapBossPoints:野外頭目 dead → 發 st=dead + ra(秒)+ ms=false", () => {
+test("buildPublicMapBossPoints:野外頭目 dead 無實測 → st=dead、不帶 ra(重生時間不定)", () => {
   const state = mkState({
     bosses: [entry({ x: MAIN_00.x, y: MAIN_00.y, alive: false, diedAt: 1000, respawnedAt: -1 })],
   });
   const r = buildPublicMapBossPoints(state, { field: [{ x: 0, y: 0 }], tree: [] }, 2000);
-  assert.deepEqual(r, [{ x: 0, y: 0, m: "world", st: "dead", ra: 1000 + DEFAULT_BOSS_RESPAWN_SECONDS, ms: false }]);
+  assert.deepEqual(r, [{ x: 0, y: 0, m: "world", st: "dead" }]);
+});
+
+test("buildPublicMapBossPoints:野外頭目 dead 有實測 → st=dead + ra + ms=true", () => {
+  const state = mkState({
+    bosses: [entry({ x: MAIN_00.x, y: MAIN_00.y, alive: false, diedAt: 1000, respawnedAt: -1, respawnInterval: 1170 })],
+  });
+  const r = buildPublicMapBossPoints(state, { field: [{ x: 0, y: 0 }], tree: [] }, 2000);
+  assert.deepEqual(r, [{ x: 0, y: 0, m: "world", st: "dead", ra: 1000 + 1170, ms: true }]);
 });
 
 test("buildPublicMapBossPoints:野外頭目 alive → st=alive、無 ra", () => {

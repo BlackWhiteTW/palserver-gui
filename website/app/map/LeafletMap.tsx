@@ -182,10 +182,13 @@ export default function LeafletMap({
         const icon = bossMarkerIcon(iconUrl, b.lv, kind, dead);
         const name = pickLocalizedName(b.name, lang);
         const kindLabel = kind === 'sealed' ? d.sealedRealm : d.alphaPal;
-        // tooltip 狀態行:dead → 重生時刻;alive → 存活;無資料(rs 不存在或 unknown) → 不加行。
+        // tooltip 狀態行:dead 有精準時間 → 重生時刻;dead 無精準時間(野外綁遊戲內時間)→ 約下個遊戲日;
+        // alive → 存活;無資料(rs 不存在或 unknown) → 不加行。
         const stateLine = rs
-          ? dead && rs.ra
-            ? `<div style="color:#e0894a">${escapeHtml(d.respawnsAt(fmtClock(rs.ra)))}${rs.ms ? '' : ' *'}</div>`
+          ? dead
+            ? rs.ra
+              ? `<div style="color:#e0894a">${escapeHtml(d.respawnsAt(fmtClock(rs.ra)))}</div>`
+              : `<div style="color:#e0894a">${escapeHtml(d.respawnNextDay)}</div>`
             : rs.st === 'alive'
               ? `<div style="color:#57c98a">${escapeHtml(d.bossAlive)}</div>`
               : ''

@@ -18,8 +18,6 @@ import {
 export const BOSS_REPORTER_MOD_NAME = "PalserverBossReporter";
 /** 狀態檔相對遊戲安裝根的路徑(模組寫、agent 讀)。 */
 export const BOSS_STATE_REL = "Pal/Saved/palserver-boss-state.json";
-/** 官方預設野外頭目重生冷卻(秒);沒有實測值時用它算倒數。 */
-export const DEFAULT_BOSS_RESPAWN_SECONDS = 3600;
 /** state 距今超過這個秒數視為過時(模組每 15s 寫一次,寬限到 60s)。 */
 export const BOSS_STATE_STALE_SECONDS = 60;
 /** 世界座標轉地圖座標後,與 bosses.json 頭目配對的最大距離(地圖單位;吸收 mapdata 與
@@ -164,15 +162,18 @@ export interface BossRespawnInfo {
   diedAt: number | null;
   /** 預估重生時間 epoch 秒(dead 且有 diedAt 時);否則 null。 */
   respawnAt: number | null;
-  /** 距離重生的秒數(可為負 = 早該重生了);null = 無倒數可算。 */
+  /** 距離重生的秒數(可為負 = 早該重生了);null = 已擊殺但重生時間不定(無實測、非固定秒數)。 */
   secondsLeft: number | null;
-  /** 這筆倒數是否採用實測重生間隔(false = 用預設 3600s)。 */
+  /** 這筆倒數是否採用實測重生間隔(true 才有精準 respawnAt/secondsLeft)。 */
   measured: boolean;
 }
 
 /**
  * 由一筆 spawner 狀態(null = 未配對到)算出顯示用的死活與重生倒數。
- * 重生間隔優先用模組實測到的 respawnInterval,沒有才退回 DEFAULT_BOSS_RESPAWN_SECONDS。
+ * 野外頭目重生綁「遊戲內時間」(下個遊戲日/黎明,隨伺服器日夜流速變),沒有固定實際秒數
+ * (研究見 .claude/notes/wild-boss-respawn-research.md)。所以只有本模組實測到完整一輪
+ * (respawnInterval>0)才給精準倒數;否則只回「已擊殺 + 擊殺時間」,respawnAt/secondsLeft 留 null,
+ * 由顯示端定性呈現(「約下個遊戲日重生」),不硬湊一個假倒數。地城頭目走 dungeonBossInfo,時間精準。
  */
 export function bossRespawnInfo(entry: BossStateEntry | null, nowSec: number): BossRespawnInfo {
   const none: BossRespawnInfo = {
@@ -191,10 +192,12 @@ export function bossRespawnInfo(entry: BossStateEntry | null, nowSec: number): B
   const diedAt = entry.diedAt > 0 ? entry.diedAt : null;
   const lastRespawn = entry.respawnedAt > 0 ? entry.respawnedAt : -1;
   if (diedAt !== null && diedAt > lastRespawn) {
-    const measured = entry.respawnInterval > 0;
-    const interval = measured ? entry.respawnInterval : DEFAULT_BOSS_RESPAWN_SECONDS;
-    const respawnAt = diedAt + interval;
-    return { status: "dead", diedAt, respawnAt, secondsLeft: respawnAt - nowSec, measured };
+    if (entry.respawnInterval > 0) {
+      const respawnAt = diedAt + entry.respawnInterval;
+      return { status: "dead", diedAt, respawnAt, secondsLeft: respawnAt - nowSec, measured: true };
+    }
+    // 已擊殺,但沒實測到重生間隔 → 重生時間不定(下個遊戲日),不給假倒數。
+    return { status: "dead", diedAt, respawnAt: null, secondsLeft: null, measured: false };
   }
   return none;
 }

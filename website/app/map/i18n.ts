@@ -53,8 +53,10 @@ export interface MapDict {
   sealedRealm: string;
   /** tooltip:頭目存活。 */
   bossAlive: string;
-  /** tooltip:「重生於 {HH:MM}」(dead)。 */
+  /** tooltip:「重生於 {HH:MM}」(dead 且有精準重生時間)。 */
   respawnsAt: (clock: string) => string;
+  /** tooltip:已擊殺但無精準重生時間(野外頭目綁遊戲內時間)。 */
+  respawnNextDay: string;
   raidWarning: string;
   noPlayers: string;
   poweredBy: string;
@@ -93,6 +95,7 @@ const dict: Record<MapLang, MapDict> = {
     sealedRealm: '封印領域',
     bossAlive: '存活中',
     respawnsAt: (c) => `重生於 ${c}`,
+    respawnNextDay: '約下個遊戲日重生',
     raidWarning: '靠近他人據點',
     noPlayers: '目前沒有玩家在線上',
     poweredBy: 'palserver GUI 公開地圖',
@@ -128,6 +131,7 @@ const dict: Record<MapLang, MapDict> = {
     sealedRealm: '封印领域',
     bossAlive: '存活中',
     respawnsAt: (c) => `重生于 ${c}`,
+    respawnNextDay: '约下个游戏日重生',
     raidWarning: '靠近他人据点',
     noPlayers: '目前没有玩家在线上',
     poweredBy: 'palserver GUI 公开地图',
@@ -163,6 +167,7 @@ const dict: Record<MapLang, MapDict> = {
     sealedRealm: 'Sealed Realm',
     bossAlive: 'Alive',
     respawnsAt: (c) => `Respawns at ${c}`,
+    respawnNextDay: 'Respawns next in-game day',
     raidWarning: "Near another guild's base",
     noPlayers: 'No players online right now',
     poweredBy: 'Public map by palserver GUI',
@@ -198,6 +203,7 @@ const dict: Record<MapLang, MapDict> = {
     sealedRealm: '封印領域',
     bossAlive: '生存中',
     respawnsAt: (c) => `${c} に復活`,
+    respawnNextDay: 'ゲーム内翌日にリポップ',
     raidWarning: '他ギルドの拠点に接近',
     noPlayers: '現在オンラインのプレイヤーはいません',
     poweredBy: 'palserver GUI 公開マップ',
