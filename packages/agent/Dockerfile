@@ -2,7 +2,7 @@
 FROM node:22-bookworm-slim AS build
 RUN corepack enable \
     && apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-pip python3-venv libfontconfig1 libgl1 \
+    && apt-get install -y --no-install-recommends python3 python3-pip python3-venv libfontconfig1 libegl1 libgl1 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV CI=true
@@ -16,7 +16,7 @@ RUN pnpm install --frozen-lockfile \
 FROM node:22-bookworm-slim
 RUN corepack enable \
     && apt-get update \
-    && apt-get install -y --no-install-recommends libfontconfig1 libgl1 fonts-noto-cjk \
+    && apt-get install -y --no-install-recommends libfontconfig1 libegl1 libgl1 fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.yaml ./
