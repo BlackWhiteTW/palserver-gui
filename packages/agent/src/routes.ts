@@ -489,7 +489,8 @@ export function registerRoutes(
       return reply.code(403).send({ error: "配置評估健檢為贊助者專屬功能,請在設定頁輸入贊助者識別碼解鎖。" });
     }
     const specs = await collectSpecs();
-    return reviewSpecs(specs);
+    // 需求依「同時運行的伺服器數」放大:建立越多台,規格門檻越高、不夠就扣分。
+    return reviewSpecs(specs, store.list().length);
   });
   // 套用系統設定:重啟自己(免安裝執行檔才會真的重啟;開發模式回 restarting:false)。
   app.post("/api/restart", async () => {

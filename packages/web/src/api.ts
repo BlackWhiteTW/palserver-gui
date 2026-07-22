@@ -126,7 +126,10 @@ export interface SystemReview {
   cpu: { rating: ReviewRating; score: number };
   disk: { rating: ReviewRating; score: number };
   network: { rating: ReviewRating; score: number };
+  /** 加權總分:100 = 剛好滿足需求;可高於 100(硬體超出需求)或低於 100。 */
   overall: number;
+  /** 計分依據的伺服器數(至少 1);越多台所需規格越高。 */
+  serverCount: number;
   generatedAt: string;
 }
 

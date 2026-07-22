@@ -1536,6 +1536,8 @@
   "檢測中(實測磁碟與網路,約 5 秒)…": "Checking (disk & network benchmark, ~5s)…",
   "實測這台主機的處理器 / 記憶體 / 磁碟寫入 / 對外網路,以「開帕魯專用伺服器」的需求給逐項評級與總分。": "Benchmarks this host's CPU / RAM / disk write / outbound network and rates each against what a Palworld dedicated server actually needs.",
   "綜合評分": "Overall score",
+  "依你目前 {n} 台伺服器計算": "Calculated for your {n} server(s)",
+  "100 分 = 剛好滿足需求;硬體超出需求會高於 100(如 121/100),不足則低於。所需規格依你建立的伺服器數放大 —— 同時要跑越多台,需要的記憶體 / 核心 / 磁碟就越高。網路為對外連線代理指標,非玩家實際延遲。": "100 = exactly meets the requirement; hardware beyond it scores over 100 (e.g. 121/100), below it scores under 100. Requirements scale with the number of servers you've created — the more you run at once, the more RAM / cores / disk you need. Network is a proxy for outbound connectivity, not players' actual latency.",
   "門檻以帕魯專用伺服器需求為準:記憶體吃最兇(單實例 8-20GB),tick 吃單核,自動備份吃循序寫入。網路為對外連線代理指標,非玩家實際延遲。": "Thresholds follow real Palworld server needs: RAM is the biggest eater (8-20GB per instance), tick rate is single-core bound, auto-backups need sequential writes. Network is an outbound proxy metric, not actual player latency.",
   "處理器": "CPU",
   "{n} 核": "{n} cores",
