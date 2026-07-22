@@ -1,4 +1,7 @@
--- PalserverBossReporter v1.5
+-- PalserverBossReporter v1.6
+-- v1.6:scanDungeons() 把 CalcRemainSecondsBy 提前、無條件在 pcall 內先算地城重生剩餘秒,
+--       remain>0 即設 respawnAt(讀 BossState 失敗時以 bs=1 fallback),避開原本在 bs==1
+--       分支內呼叫遊戲 API 的當機路徑(PR #53)。
 -- v1.5:「觀測有斷過、這次測到的重生間隔不可信」時,除了不覆蓋新值,也把舊的 respawnInterval
 --       一併清成 -1——不然舊測量值會被之後每一次死亡繼續沿用,顯示一個跟本次死亡無關的舊倒數
 --       (使用者實測回報:剛捕捉的頭目顯示 22 小時後重生,查出來就是幾天前某輪的殘留值)。
