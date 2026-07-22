@@ -45,6 +45,10 @@ const GH_REPOS: Record<
 
 const win64Dir = (root: string) => path.join(root, "Pal", "Binaries", "Win64");
 
+/** mod 下載逾時(毫秒):卡住的下載超過這個時間就中止並報錯,避免永遠掛著、累積佔連線。
+ *  大檔(UE4SS ~7MB)在正常網路幾秒完成;限速地區走鏡像。3 分鐘是留裕度的上限。 */
+const MOD_DOWNLOAD_TIMEOUT_MS = 180_000;
+
 /** Container/Pod 內的遊戲根目錄（docker/k8s Wine image = /palworld, 同 thijsvanloef 慣例）。 */
 const CONTAINER_INSTALL_DIR = "/palworld";
 const CONTAINER_WIN64_DIR = `${CONTAINER_INSTALL_DIR}/Pal/Binaries/Win64`;
@@ -389,7 +393,23 @@ export async function installComponent(
   const { version, url } = urlOverride
     ? { version: "custom", url: urlOverride }
     : await resolveDownload(component, channel);
-  const res = await fetch(url, { redirect: "follow" });
+  // 下載加逾時:沒有 signal 時,連線卡住(慢速 CDN / 對端不回)會讓 fetch 永遠掛著,
+  // 且 HTTP 客戶端斷線也不會中止 server 端下載 → 卡住的下載會累積、佔住連線。逾時就中止並報錯。
+  let res: Response;
+  try {
+    res = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(MOD_DOWNLOAD_TIMEOUT_MS) });
+  } catch (e) {
+    if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
+      throw Object.assign(
+        new Error(
+          `下載逾時(超過 ${Math.round(MOD_DOWNLOAD_TIMEOUT_MS / 1000)}s):連線過慢或對端無回應。` +
+            `限速地區可改用鏡像(install 帶 url,或設 ${GH_REPOS[component].envUrl})。來源:${url}`,
+        ),
+        { statusCode: 504 },
+      );
+    }
+    throw e;
+  }
   if (!res.ok) throw new Error(`download failed: HTTP ${res.status}`);
   const zipBuffer = Buffer.from(await res.arrayBuffer());
 
